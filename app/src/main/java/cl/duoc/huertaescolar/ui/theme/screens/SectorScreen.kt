@@ -1,4 +1,4 @@
-package cl.duoc.huertaescolar.ui
+package cl.duoc.huertaescolar.ui.theme.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
