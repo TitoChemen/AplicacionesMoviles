@@ -11,10 +11,17 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-@Database(entities = [Usuario::class, Sector::class, Cultivo::class, Tarea::class],
-    // ANTERIOR version = 1,
-    version = 2,
-    exportSchema = false)
+@Database(
+    entities = [
+        Usuario::class,
+        Sector::class,
+        Cultivo::class,
+        Tarea::class,
+        Alerta::class
+    ],
+    version = 3, // Incrementado a 3 para aplicar el cambio con fallbackToDestructiveMigration
+    exportSchema = false
+)
 abstract class HuertaDatabase : RoomDatabase() {
 
     abstract fun usuarioDao(): UsuarioDao

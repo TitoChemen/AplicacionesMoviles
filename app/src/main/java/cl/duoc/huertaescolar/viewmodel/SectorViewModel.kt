@@ -6,7 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import cl.duoc.huertaescolar.data.database.HuertaDataBase
+import cl.duoc.huertaescolar.data.database.HuertaDatabase
 import cl.duoc.huertaescolar.data.local.entity.Cultivo
 import cl.duoc.huertaescolar.data.local.entity.Sector
 import cl.duoc.huertaescolar.data.repository.HuertaRepository
@@ -20,28 +20,30 @@ class SectorViewModel(application: Application) : AndroidViewModel(application) 
     private val repository: HuertaRepository
 
     init {
-        val database = HuertaDataBase.getDatabase(application)
+        val database = HuertaDatabase.obtenerBaseDatos(application)
+        // El orden coincide exactamente con HuertaRepository
         repository = HuertaRepository(
             sectorDao = database.sectorDao(),
             cultivoDao = database.cultivoDao(),
             tareaDao = database.tareaDao(),
-            usuarioDao = database.usuarioDao()
+            usuarioDao = database.usuarioDao(),
+            alertaDao = database.alertaDao()
         )
     }
 
-    // Listas observables desde la base de datos
+    // Flujos observables llamados desde los métodos del repositorio
     val sectores: StateFlow<List<Sector>> = repository.obtenerSectores()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val cultivos: StateFlow<List<Cultivo>> = repository.obtenerCultivos()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Estados para el formulario de Sectores
+    // Formulario de Sectores
     var nombreSector by mutableStateOf("")
     var descripcionSector by mutableStateOf("")
-    var cultivoSeleccionadoId by mutableStateOf<Long?>(null)
+    var cultivoSeleccionadoId by mutableStateOf<Int?>(null)
 
-    // Datos simulados de sensores para mostrar en la interfaz
+    // Datos de sensores
     var temperaturaSimulada by mutableStateOf(23.5)
     var humedadSimulada by mutableStateOf(68.0)
 
@@ -50,10 +52,14 @@ class SectorViewModel(application: Application) : AndroidViewModel(application) 
             viewModelScope.launch {
                 val nuevoSector = Sector(
                     nombre = nombreSector,
-                    descripcion = descripcionSector
+                    descripcion = descripcionSector,
+                    codigo = "SEC-${System.currentTimeMillis().toString().takeLast(4)}",
+                    ubicacion = "Zona Principal",
+                    estado = "ACTIVO",
+                    fechaCreacion = "2026-03-01",
+                    responsableId = "admin1"
                 )
                 repository.insertarSector(nuevoSector)
-                // Limpiar campos
                 nombreSector = ""
                 descripcionSector = ""
                 onSuccess()
@@ -61,12 +67,17 @@ class SectorViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun registrarCultivo(nombre: String, tipo: String) {
+    fun registrarCultivo(nombre: String, descripcion: String) {
         if (nombre.isNotBlank()) {
             viewModelScope.launch {
                 val nuevoCultivo = Cultivo(
-                    nombre = nombre,
-                    tipo = tipo
+                    sectorId = 1,
+                    nombreComun = nombre,
+                    descripcion = descripcion,
+                    fechaSiembra = "2026-03-01",
+                    fechaCosechaEstimada = "2026-06-01",
+                    frecuenciaRiego = "Diario",
+                    estadoDesarrollo = "CRECIMIENTO"
                 )
                 repository.insertarCultivo(nuevoCultivo)
             }

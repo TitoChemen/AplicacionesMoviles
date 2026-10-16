@@ -5,34 +5,35 @@ import cl.duoc.huertaescolar.data.local.entity.*
 import kotlinx.coroutines.flow.Flow
 
 class HuertaRepository(
-    private val usuarioDao: UsuarioDao,
     private val sectorDao: SectorDao,
     private val cultivoDao: CultivoDao,
     private val tareaDao: TareaDao,
+    private val usuarioDao: UsuarioDao,
     private val alertaDao: AlertaDao
 ) {
-    // Usuarios / Login
+    // Auth / Usuarios
     suspend fun login(id: String): Usuario? = usuarioDao.obtenerUsuarioPorId(id)
 
-    // Sectores y Cultivos (Para que los consuma el Oscar)
-    val sectores: Flow<List<Sector>> = sectorDao.obtenerSectores()
+    // Sectores
+    fun obtenerSectores(): Flow<List<Sector>> = sectorDao.obtenerSectores()
+    suspend fun insertarSector(sector: Sector) = sectorDao.insertarSector(sector)
 
+    // Cultivos
+    fun obtenerCultivos(): Flow<List<Cultivo>> = cultivoDao.obtenerCultivos()
     fun obtenerCultivosDelSector(sectorId: Int): Flow<List<Cultivo>> =
         cultivoDao.obtenerCultivosPorSector(sectorId)
-
-    suspend fun insertarSector(sector: Sector) = sectorDao.insertarSector(sector)
     suspend fun insertarCultivo(cultivo: Cultivo) = cultivoDao.insertarCultivo(cultivo)
 
-    // Tareas (Para que los consuma el Jaime)
-    // Métodos para el módulo de Tareas y Alertas dentro de HuertaRepository.kt
+    // Tareas
     fun obtenerTareasPendientes(estudianteId: String) =
         tareaDao.obtenerTareasPendientesEstudiante(estudianteId)
 
     fun obtenerHistorialTareas(estudianteId: String) =
         tareaDao.obtenerHistorialTareasEstudiante(estudianteId)
 
-    fun obtenerHistorialAlertas() =
-        alertaDao.obtenerHistorialAlertas()
+    suspend fun insertarTarea(tarea: Tarea) {
+        tareaDao.insertarTarea(tarea)
+    }
 
     suspend fun marcarTareaComoRealizada(
         tarea: Tarea,
@@ -40,18 +41,17 @@ class HuertaRepository(
         rutaFoto: String
     ) {
         val tareaActualizada = tarea.copy(
-            estado = "REALIZADA", // O "PENDIENTE_VALIDACION" si requiere revisión docente
+            estado = "REALIZADA",
             comentarioEstudiante = comentarioEstudiante?.ifBlank { null },
             rutaFotografia = rutaFoto
         )
         tareaDao.actualizarTarea(tareaActualizada)
     }
 
+    // Alertas
+    fun obtenerHistorialAlertas() = alertaDao.obtenerHistorialAlertas()
+
     suspend fun registrarAlerta(alerta: Alerta) {
         alertaDao.insertarAlerta(alerta)
-    }
-
-    suspend fun insertarTarea(tarea: Tarea) {
-        tareaDao.insertarTarea(tarea)
     }
 }

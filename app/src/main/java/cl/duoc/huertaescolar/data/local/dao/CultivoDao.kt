@@ -9,6 +9,10 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CultivoDao {
+    // Agrega esta línea para obtener todos los cultivos
+    @Query("SELECT * FROM cultivos")
+    fun obtenerCultivos(): Flow<List<Cultivo>>
+
     @Query("SELECT * FROM cultivos WHERE sectorId = :sectorId")
     fun obtenerCultivosPorSector(sectorId: Int): Flow<List<Cultivo>>
 
