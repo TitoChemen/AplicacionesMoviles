@@ -71,4 +71,7 @@ dependencies {
     // ViewModel y Lifecycle Compose
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
+
+    // Miniatura de las fotos
+    implementation("io.coil-kt:coil-compose:2.6.0")
 }

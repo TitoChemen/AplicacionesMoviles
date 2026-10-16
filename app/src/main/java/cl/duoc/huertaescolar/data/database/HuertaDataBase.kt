@@ -11,13 +11,17 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-@Database(entities = [Usuario::class, Sector::class, Cultivo::class, Tarea::class], version = 1, exportSchema = false)
+@Database(entities = [Usuario::class, Sector::class, Cultivo::class, Tarea::class],
+    // ANTERIOR version = 1,
+    version = 2,
+    exportSchema = false)
 abstract class HuertaDatabase : RoomDatabase() {
 
     abstract fun usuarioDao(): UsuarioDao
     abstract fun sectorDao(): SectorDao
     abstract fun cultivoDao(): CultivoDao
     abstract fun tareaDao(): TareaDao
+    abstract fun alertaDao(): AlertaDao
 
     companion object {
         @Volatile
@@ -30,6 +34,7 @@ abstract class HuertaDatabase : RoomDatabase() {
                     HuertaDatabase::class.java,
                     "huerta_escolar_db"
                 )
+                    .fallbackToDestructiveMigration() // Recrea la BD si cambia de versión
                     .addCallback(CallbackPrecarga()) // Inserta datos iniciales al arrancar por primera vez
                     .build()
                 INSTANCE = instance
@@ -49,6 +54,31 @@ abstract class HuertaDatabase : RoomDatabase() {
                         database.usuarioDao().insertarUsuario(
                             Usuario("estudiante1", "Kevin (Tú)", "ESTUDIANTE", "8vo Básico", "ACTIVA")
                         )
+
+                        // Tareas de prueba asignadas a estudiante1
+                        database.tareaDao().insertarTarea(
+                            Tarea(
+                                tipo = "RIEGO",
+                                descripcion = "Regar los almácigos de tomates y revisar humedad de la tierra.",
+                                sectorId = 1,
+                                cultivoId = 1,
+                                fechaProgramada = "Hoy - 10:30 AM",
+                                asignadoA = "estudiante1",
+                                estado = "PENDIENTE"
+                            )
+                        )
+                        database.tareaDao().insertarTarea(
+                            Tarea(
+                                tipo = "SIEMBRA",
+                                descripcion = "Plantar semillas de lechuga escarola a 15 cm de distancia.",
+                                sectorId = 2,
+                                cultivoId = null,
+                                fechaProgramada = "Hoy - 12:00 PM",
+                                asignadoA = "estudiante1",
+                                estado = "PENDIENTE"
+                            )
+                        )
+
                     }
                 }
             }

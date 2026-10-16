@@ -8,7 +8,8 @@ class HuertaRepository(
     private val usuarioDao: UsuarioDao,
     private val sectorDao: SectorDao,
     private val cultivoDao: CultivoDao,
-    private val tareaDao: TareaDao
+    private val tareaDao: TareaDao,
+    private val alertaDao: AlertaDao
 ) {
     // Usuarios / Login
     suspend fun login(id: String): Usuario? = usuarioDao.obtenerUsuarioPorId(id)
@@ -23,10 +24,34 @@ class HuertaRepository(
     suspend fun insertarCultivo(cultivo: Cultivo) = cultivoDao.insertarCultivo(cultivo)
 
     // Tareas (Para que los consuma el Jaime)
-    fun obtenerTareasEstudiante(estudianteId: String): Flow<List<Tarea>> =
-        tareaDao.obtenerTareasPorEstudiante(estudianteId)
+    // Métodos para el módulo de Tareas y Alertas dentro de HuertaRepository.kt
+    fun obtenerTareasPendientes(estudianteId: String) =
+        tareaDao.obtenerTareasPendientesEstudiante(estudianteId)
 
-    suspend fun insertarTarea(tarea: Tarea) = tareaDao.insertarTarea(tarea)
-    suspend fun actualizarTarea(id: Int, estado: String, comentario: String) =
-        tareaDao.actualizarEstadoTarea(id, estado, comentario)
+    fun obtenerHistorialTareas(estudianteId: String) =
+        tareaDao.obtenerHistorialTareasEstudiante(estudianteId)
+
+    fun obtenerHistorialAlertas() =
+        alertaDao.obtenerHistorialAlertas()
+
+    suspend fun marcarTareaComoRealizada(
+        tarea: Tarea,
+        comentarioEstudiante: String?,
+        rutaFoto: String
+    ) {
+        val tareaActualizada = tarea.copy(
+            estado = "REALIZADA", // O "PENDIENTE_VALIDACION" si requiere revisión docente
+            comentarioEstudiante = comentarioEstudiante?.ifBlank { null },
+            rutaFotografia = rutaFoto
+        )
+        tareaDao.actualizarTarea(tareaActualizada)
+    }
+
+    suspend fun registrarAlerta(alerta: Alerta) {
+        alertaDao.insertarAlerta(alerta)
+    }
+
+    suspend fun insertarTarea(tarea: Tarea) {
+        tareaDao.insertarTarea(tarea)
+    }
 }
