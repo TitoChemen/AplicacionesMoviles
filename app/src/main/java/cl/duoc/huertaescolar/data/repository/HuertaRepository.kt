@@ -54,4 +54,8 @@ class HuertaRepository(
     suspend fun registrarAlerta(alerta: Alerta) {
         alertaDao.insertarAlerta(alerta)
     }
+    // dado por la IA
+    suspend fun loginUsuario(correo: String, contrasena: String): Usuario? {
+        return loginUsuario(correo, contrasena)
+    }
 }
