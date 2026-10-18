@@ -16,4 +16,7 @@ interface UsuarioDao {
 
     @Query("DELETE FROM usuarios")
     suspend fun borrarUsuarios()
+
+    @Query("SELECT * FROM usuarios")
+    suspend fun obtenerUsuarios(): List<Usuario>
 }

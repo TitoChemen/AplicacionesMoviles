@@ -17,7 +17,7 @@ import cl.duoc.huertaescolar.viewmodel.SectorViewModel
 @Composable
 fun SectorScreen(viewModel: SectorViewModel) {
     val sectores by viewModel.sectores.collectAsState()
-    
+
     // Estado para controlar errores visuales en el formulario
     var hasError by remember { mutableStateOf(false) }
     var mensajeExito by remember { mutableStateOf("") }
@@ -60,9 +60,9 @@ fun SectorScreen(viewModel: SectorViewModel) {
 
                         OutlinedTextField(
                             value = viewModel.nombreSector,
-                            onValueChange = { 
+                            onValueChange = {
                                 viewModel.nombreSector = it
-                                hasError = false 
+                                hasError = false
                             },
                             label = { Text("Nombre del Sector") },
                             isError = hasError && viewModel.nombreSector.isBlank(),
@@ -96,13 +96,10 @@ fun SectorScreen(viewModel: SectorViewModel) {
 
                         Button(
                             onClick = {
-                                if (viewModel.nombreSector.isBlank()) {
-                                    hasError = true
-                                } else {
-                                    viewModel.registrarSector {
-                                        mensajeExito = "¡Sector registrado con éxito!"
-                                        hasError = false
-                                    }
+                                // Le pasamos un 1 temporalmente asumiendo que es el ID del Admin
+                                viewModel.registrarSector(responsableId = 1) {
+                                    mensajeExito = "¡Sector registrado con éxito!"
+                                    // hasError = false (si es que sigues usando esta variable local)
                                 }
                             },
                             modifier = Modifier.align(Alignment.End)

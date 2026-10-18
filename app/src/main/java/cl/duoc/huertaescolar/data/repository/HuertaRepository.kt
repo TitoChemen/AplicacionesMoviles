@@ -58,4 +58,15 @@ class HuertaRepository(
     suspend fun loginUsuario(correo: String, contrasena: String): Usuario? {
         return loginUsuario(correo, contrasena)
     }
+    suspend fun obtenerTodasLasTareas(): List<Tarea> {
+        return tareaDao.obtenerTodasLasTareas()
+    }
+
+    suspend fun obtenerUsuarios(): List<Usuario> {
+        return usuarioDao.obtenerUsuarios()
+    }
+
+    suspend fun actualizarTarea(tarea: Tarea) {
+        tareaDao.actualizarTarea(tarea)
+    }
 }
