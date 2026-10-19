@@ -7,15 +7,6 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TareaDao {
-    /*
-    ANTERIORES
-    @Query("SELECT * FROM tareas WHERE asignadoA = :estudianteId")
-    fun obtenerTareasPorEstudiante(estudianteId: String): Flow<List<Tarea>>
-
-    @Query("UPDATE tareas SET estado = :nuevoEstado, comentarioEstudiante = :comentario WHERE id = :tareaId")
-    suspend fun actualizarEstadoTarea(tareaId: Int, nuevoEstado: String, comentario: String)
-    */
-
     @Query("SELECT * FROM tareas WHERE asignadoA = :estudianteId AND estado = 'PENDIENTE' ORDER BY id DESC")
     fun obtenerTareasPendientesEstudiante(estudianteId: String): Flow<List<Tarea>>
 
@@ -31,7 +22,7 @@ interface TareaDao {
     @Query("SELECT * FROM tareas")
     suspend fun obtenerTodasLasTareas(): List<Tarea>
 
-    @Query("SELECT * FROM usuarios") // Cambia "tabla_usuarios" por el nombre real de tu tabla
+    @Query("SELECT * FROM usuarios")
     suspend fun obtenerUsuarios(): List<Usuario>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -39,4 +30,7 @@ interface TareaDao {
 
     @Update
     suspend fun actualizarTarea(tarea: Tarea)
+
+    @Delete
+    suspend fun eliminarTarea(tarea: Tarea) // <-- ¡Esta es la que faltaba para borrar tareas!
 }

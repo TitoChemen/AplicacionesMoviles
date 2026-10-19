@@ -37,18 +37,56 @@ fun HuertaAppNavigation() {
         composable("login") {
             LoginScreen(
                 error = loginError,
-                onLogin = { id ->
-                    authViewModel.login(id) {
-                        navController.navigate("dashboard") {
-                            popUpTo("login") { inclusive = true }
+                onLogin = { identificadorIngresado, contrasenaIngresada ->
+                    // 🔑 Le pasamos ambos parámetros a la función login del AuthViewModel
+                    authViewModel.login(identificadorIngresado, contrasenaIngresada) {
+                        val usuarioActual = authViewModel.usuarioActivo.value
+                        if (usuarioActual?.perfil == "ADMINISTRADOR") {
+                            navController.navigate("menu_admin") {
+                                popUpTo("login") { inclusive = true }
+                            }
+                        } else {
+                            navController.navigate("menu_estudiante") {
+                                popUpTo("login") { inclusive = true }
+                            }
                         }
                     }
                 },
-                onEditar = { authViewModel.clearError() }
+                onEditar = {
+                    authViewModel.clearError()
+                }
             )
         }
 
-        // --- Dashboard según rol ---
+        // --- Menú Administrador ---
+        composable("menu_admin") {
+            DashboardScreen(
+                usuario = usuario,
+                navController = navController,
+                onLogout = {
+                    authViewModel.logout()
+                    navController.navigate("login") {
+                        popUpTo("menu_admin") { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        // --- Menú Estudiante ---
+        composable("menu_estudiante") {
+            DashboardScreen(
+                usuario = usuario,
+                navController = navController,
+                onLogout = {
+                    authViewModel.logout()
+                    navController.navigate("login") {
+                        popUpTo("menu_estudiante") { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        // --- Dashboard genérico por si acaso ---
         composable("dashboard") {
             DashboardScreen(
                 usuario = usuario,
@@ -67,6 +105,7 @@ fun HuertaAppNavigation() {
             SectorScreen(
                 viewModel = sectorViewModel,
                 onNavigateToCamera = { navController.navigate("camara_evidencia") },
+                onBackClick = { navController.popBackStack() },
                 idResponsable = usuario?.identificador ?: "admin1",
                 onSectorClick = { id -> navController.navigate("detalle_sector/$id") }
             )
@@ -99,7 +138,7 @@ fun HuertaAppNavigation() {
             )
         }
 
-        // --- Tareas (las mismas pantallas sirven para varias entradas del dashboard) ---
+        // --- Tareas ---
         listOf("lista_tareas", "mis_tareas", "historial_actividades", "revision_tareas").forEach { ruta ->
             composable(ruta) {
                 ListaTareasScreen(
@@ -148,7 +187,7 @@ fun HuertaAppNavigation() {
     }
 }
 
-// Pantalla temporal para funciones pendientes (evita que la app se caiga al navegar)
+// Pantalla temporal para funciones pendientes
 @Composable
 fun PantallaEnConstruccion(titulo: String, onVolver: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

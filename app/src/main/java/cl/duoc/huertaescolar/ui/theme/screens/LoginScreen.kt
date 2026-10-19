@@ -5,16 +5,18 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 @Composable
 fun LoginScreen(
     error: String?,
-    onLogin: (String) -> Unit,
+    onLogin: (String, String) -> Unit, // 🔑 Ahora recibe (identificador, contraseña)
     onEditar: () -> Unit
 ) {
     var identificador by remember { mutableStateOf("") }
+    var contrasena by remember { mutableStateOf("") } // 🔒 NUEVO: Estado para la contraseña
 
     Column(
         modifier = Modifier
@@ -30,6 +32,7 @@ fun LoginScreen(
         )
         Spacer(Modifier.height(24.dp))
 
+        // Campo de Identificador
         OutlinedTextField(
             value = identificador,
             onValueChange = {
@@ -37,17 +40,40 @@ fun LoginScreen(
                 onEditar()
             },
             label = { Text("Identificador de usuario") },
-            isError = error != null,
-            supportingText = {
-                if (error != null) Text(error, color = MaterialTheme.colorScheme.error)
-            },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
+
         Spacer(Modifier.height(16.dp))
 
+        // 🔒 NUEVO: Campo de Contraseña
+        OutlinedTextField(
+            value = contrasena,
+            onValueChange = {
+                contrasena = it
+                onEditar()
+            },
+            label = { Text("Contraseña") },
+            visualTransformation = PasswordVisualTransformation(), // Oculta los caracteres con puntitos
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        // Mensaje de Error (si las credenciales fallan)
+        if (error != null) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = error,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        // Botón de Ingresar
         Button(
-            onClick = { onLogin(identificador) },
+            onClick = { onLogin(identificador, contrasena) }, // 🔑 Enviamos ambos datos
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Ingresar")
@@ -55,7 +81,7 @@ fun LoginScreen(
 
         Spacer(Modifier.height(24.dp))
         Text(
-            text = "Usuarios de prueba: admin1 (administrador) · estudiante1 (estudiante)",
+            text = "Prueba con:\nadmin1 / admin123 (Administrador)\nestudiante1 / alumno123 (Estudiante)",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline,
             textAlign = TextAlign.Center

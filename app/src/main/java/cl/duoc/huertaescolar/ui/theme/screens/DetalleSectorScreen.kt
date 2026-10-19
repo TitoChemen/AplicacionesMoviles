@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material.icons.filled.Eco
@@ -47,8 +48,6 @@ fun DetalleSectorScreen(
             )
         },
         floatingActionButton = {
-            // Checklist: Restringir acceso (Solo administradores deberían ver este botón,
-            // esto lo puedes ocultar validando el rol del usuario activo aquí)
             FloatingActionButton(
                 onClick = { navController.navigate("crear_cultivo/$sectorId") },
                 containerColor = MaterialTheme.colorScheme.primary
@@ -71,7 +70,7 @@ fun DetalleSectorScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // SECCIÓN 1: INFO DEL SECTOR
+            // SECCIÓN 1: INFO DEL SECTOR + BOTÓN ELIMINAR
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -90,11 +89,33 @@ fun DetalleSectorScreen(
                                 style = MaterialTheme.typography.bodyMedium
                             )
                         }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // BOTÓN DE ELIMINAR SECTOR (Adiós sector cochino)
+                        Button(
+                            onClick = {
+                                viewModel.eliminarSector(sectorActual)
+                                navController.popBackStack()
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Eliminar este Sector")
+                        }
                     }
                 }
             }
 
-            // SECCIÓN 2: PANEL DE SENSORES (Tu código integrado)
+            // SECCIÓN 2: PANEL DE SENSORES
             item {
                 Text(
                     text = "Monitoreo en Tiempo Real",
@@ -164,7 +185,6 @@ fun DetalleSectorScreen(
 
             if (cultivosDelSector.isEmpty()) {
                 item {
-                    // Checklist: Mostrar estados vacíos
                     Text(
                         text = "Aún no hay cultivos registrados en este sector.",
                         style = MaterialTheme.typography.bodyMedium,

@@ -26,29 +26,32 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    // Usuario autenticado. Si es null, no hay sesión activa.
+    // 🔄 Nombres alineados con tu HuertaAppNavigation.kt
     private val _usuarioActivo = MutableStateFlow<Usuario?>(null)
     val usuarioActivo: StateFlow<Usuario?> = _usuarioActivo.asStateFlow()
 
-    // Mensaje de error para mostrar en la UI
     private val _loginError = MutableStateFlow<String?>(null)
     val loginError: StateFlow<String?> = _loginError.asStateFlow()
 
-    fun login(identificador: String, onSuccess: () -> Unit) {
-        if (identificador.isBlank()) {
-            _loginError.value = "Por favor, ingresa tu identificador."
+    fun login(identificador: String, contrasena: String, onSuccess: () -> Unit) {
+        if (identificador.isBlank() || contrasena.isBlank()) {
+            _loginError.value = "Por favor, completa todos los campos."
             return
         }
 
         viewModelScope.launch {
             try {
-                val usuario = repository.login(identificador.trim())
+                val usuario = repository.login(identificador.trim(), contrasena.trim())
                 if (usuario != null) {
-                    _usuarioActivo.value = usuario
-                    _loginError.value = null
-                    onSuccess()
+                    if (usuario.estadoCuenta == "ACTIVA") {
+                        _usuarioActivo.value = usuario
+                        _loginError.value = null
+                        onSuccess()
+                    } else {
+                        _loginError.value = "Esta cuenta se encuentra inactiva."
+                    }
                 } else {
-                    _loginError.value = "Usuario no encontrado o cuenta inactiva."
+                    _loginError.value = "Identificador o contraseña incorrectos."
                 }
             } catch (e: Exception) {
                 _loginError.value = "Ocurrió un error al intentar iniciar sesión."
@@ -56,6 +59,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // 🔄 Nombre alineado a logout() como lo pide la navegación
     fun logout() {
         _usuarioActivo.value = null
         _loginError.value = null

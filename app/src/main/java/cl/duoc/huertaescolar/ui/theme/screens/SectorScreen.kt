@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.*
@@ -19,19 +20,29 @@ import cl.duoc.huertaescolar.viewmodel.SectorViewModel
 fun SectorScreen(
     viewModel: SectorViewModel,
     onNavigateToCamera: () -> Unit,
+    onBackClick: () -> Unit = {},
     idResponsable: String = "admin1",
     onSectorClick: (Int) -> Unit = {}
 ) {
     val sectores by viewModel.sectores.collectAsState()
 
-    // Estado para controlar errores visuales en el formulario
+    // Estados para errores y el diálogo de éxito
     var hasError by remember { mutableStateOf(false) }
     var mensajeExito by remember { mutableStateOf("") }
+    var mostrarDialogoExito by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Gestión de Sectores y Sensores - Huerto") },
+                title = { Text("Gestión de Sectores y Sensores") },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Volver"
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -39,197 +50,224 @@ fun SectorScreen(
             )
         }
     ) { paddingValues ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // SECCIÓN 1: FORMULARIO DE REGISTRO
-            item {
-                Card(
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Text(
-                            text = "Registrar Nuevo Sector",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-
-                        OutlinedTextField(
-                            value = viewModel.nombreSector,
-                            onValueChange = {
-                                viewModel.nombreSector = it
-                                hasError = false
-                            },
-                            label = { Text("Nombre del Sector") },
-                            isError = hasError && viewModel.nombreSector.isBlank(),
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-
-                        OutlinedTextField(
-                            value = viewModel.descripcionSector,
-                            onValueChange = { viewModel.descripcionSector = it },
-                            label = { Text("Descripción / Ubicación") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-
-                        if (hasError && viewModel.nombreSector.isBlank()) {
-                            Text(
-                                text = "El nombre del sector no puede estar vacío.",
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-
-                        if (mensajeExito.isNotBlank()) {
-                            Text(
-                                text = mensajeExito,
-                                color = MaterialTheme.colorScheme.tertiary,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-
-                        Button(
-                            onClick = {
-                                // Le pasamos un 1 temporalmente asumiendo que es el ID del Admin
-                                viewModel.registrarSector(responsableId = idResponsable) {
-                                    mensajeExito = "¡Sector registrado con éxito!"
-                                    // hasError = false (si es que sigues usando esta variable local)
-                                }
-                            },
-                            modifier = Modifier.align(Alignment.End)
-                        ) {
-                            Text("Guardar Sector")
-                        }
-                    }
-                }
-            }
-
-            // SECCIÓN 2: PANEL DE SENSORES SIMULADOS
-            item {
-                Text(
-                    text = "Monitoreo de Sensores (Simulación)",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-            }
-
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Tarjeta de Temperatura
-                    ElevatedCard(
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Thermostat,
-                                contentDescription = "Temperatura",
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("Temperatura", style = MaterialTheme.typography.bodyMedium)
-                            Text(
-                                text = "${viewModel.temperaturaSimulada} °C",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-
-                    // Tarjeta de Humedad del Suelo
-                    ElevatedCard(
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.WaterDrop,
-                                contentDescription = "Humedad",
-                                tint = MaterialTheme.colorScheme.secondary
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("Humedad Suelo", style = MaterialTheme.typography.bodyMedium)
-                            Text(
-                                text = "${viewModel.humedadSimulada} %",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = MaterialTheme.colorScheme.secondary
-                            )
-                        }
-                    }
-                }
-            }
-
-            // SECCIÓN 3: LISTA DE SECTORES REGISTRADOS
-            item {
-                Text(
-                    text = "Sectores Registrados en la Base de Datos",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-            }
-
-            if (sectores.isEmpty()) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // SECCIÓN 1: FORMULARIO DE REGISTRO
                 item {
-                    Text(
-                        text = "No hay sectores registrados todavía.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.outline
-                    )
-                }
-            } else {
-                items(sectores) { sector ->
                     Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSectorClick(sector.id) },
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
                             Text(
-                                text = sector.nombre,
+                                text = "Registrar Nuevo Sector",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.primary
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = sector.descripcion.ifBlank { "Sin descripción" },
-                                style = MaterialTheme.typography.bodyMedium
+
+                            OutlinedTextField(
+                                value = viewModel.nombreSector,
+                                onValueChange = {
+                                    viewModel.nombreSector = it
+                                    hasError = false
+                                },
+                                label = { Text("Nombre del Sector") },
+                                isError = hasError && viewModel.nombreSector.isBlank(),
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
                             )
+
+                            OutlinedTextField(
+                                value = viewModel.descripcionSector,
+                                onValueChange = {
+                                    viewModel.descripcionSector = it
+                                    viewModel.ubicacionSector = it
+                                },
+                                label = { Text("Descripción / Ubicación") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+
+                            if (hasError && viewModel.nombreSector.isBlank()) {
+                                Text(
+                                    text = "El nombre del sector no puede estar vacío.",
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+
+                            if (mensajeExito.isNotBlank()) {
+                                Text(
+                                    text = mensajeExito,
+                                    color = MaterialTheme.colorScheme.tertiary,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+
+                            Button(
+                                onClick = {
+                                    if (viewModel.nombreSector.isBlank()) {
+                                        hasError = true
+                                    } else {
+                                        viewModel.registrarSector(responsableId = idResponsable) {
+                                            mostrarDialogoExito = true
+                                            hasError = false
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.align(Alignment.End)
+                            ) {
+                                Text("Guardar Sector")
+                            }
                         }
+                    }
+                }
+
+                // SECCIÓN 2: PANEL DE SENSORES SIMULADOS
+                item {
+                    Text(
+                        text = "Monitoreo de Sensores (Simulación)",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // Tarjeta de Temperatura
+                        ElevatedCard(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Thermostat,
+                                    contentDescription = "Temperatura",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text("Temperatura", style = MaterialTheme.typography.bodyMedium)
+                                Text(
+                                    text = "${viewModel.temperaturaSimulada} °C",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+
+                        // Tarjeta de Humedad del Suelo
+                        ElevatedCard(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.WaterDrop,
+                                    contentDescription = "Humedad",
+                                    tint = MaterialTheme.colorScheme.secondary
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text("Humedad Suelo", style = MaterialTheme.typography.bodyMedium)
+                                Text(
+                                    text = "${viewModel.humedadSimulada} %",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // SECCIÓN 3: LISTA DE SECTORES REGISTRADOS
+                item {
+                    Text(
+                        text = "Sectores Registrados en la Base de Datos",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+
+                if (sectores.isEmpty()) {
+                    item {
+                        Text(
+                            text = "No hay sectores registrados todavía.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                } else {
+                    items(sectores) { sector ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSectorClick(sector.id) },
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = sector.nombre,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = sector.descripcion.ifBlank { "Sin descripción" },
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // SECCIÓN 4: BOTÓN DE NAVEGACIÓN A CÁMARA
+                item {
+                    Button(
+                        onClick = { onNavigateToCamera() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp)
+                    ) {
+                        Text("Tomar Foto de Evidencia")
                     }
                 }
             }
 
-            // SECCIÓN 4: BOTÓN DE NAVEGACIÓN (NUEVO)
-            // Lo ponemos dentro de un "item" para que el LazyColumn lo reconozca
-            item {
-                Button(
-                    onClick = { onNavigateToCamera() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp)
-                ) {
-                    Text("Tomar Foto de Evidencia")
-                }
+            // POP-UP DE ÉXITO FLOTANTE
+            if (mostrarDialogoExito) {
+                AlertDialog(
+                    onDismissRequest = { mostrarDialogoExito = false },
+                    title = { Text("¡Éxito!") },
+                    text = { Text("El sector se ha creado con éxito en la base de datos.") },
+                    confirmButton = {
+                        Button(
+                            onClick = { mostrarDialogoExito = false }
+                        ) {
+                            Text("Aceptar")
+                        }
+                    },
+                    modifier = Modifier.align(Alignment.Center)
+                )
             }
         }
     }

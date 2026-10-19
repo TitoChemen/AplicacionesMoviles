@@ -12,6 +12,7 @@ import cl.duoc.huertaescolar.data.database.HuertaDatabase
 import cl.duoc.huertaescolar.data.local.entity.Tarea
 import cl.duoc.huertaescolar.data.local.entity.Usuario
 import cl.duoc.huertaescolar.data.repository.HuertaRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class TareaViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -53,6 +55,7 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
     fun actualizarFiltro(nuevoFiltro: String) {
         _filtroSeleccionado.value = nuevoFiltro
     }
+
 
     // 4. Decide qué datos traer según el rol (administrador: todas; estudiante: las suyas)
     private var jobTareas: Job? = null
@@ -114,7 +117,7 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
         if (responsableIdSeleccionado == null) { errorResponsable = "Debe asignar un responsable a la tarea."; formularioValido = false }
 
         if (formularioValido) {
-            viewModelScope.launch {
+            viewModelScope.launch(Dispatchers.IO) {
                 val nuevaTarea = Tarea(
                     tipo = tipoTarea,
                     descripcion = descripcionTarea,
@@ -134,9 +137,49 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
                 fechaProgramada = ""
                 responsableIdSeleccionado = null
 
+                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    onSuccess()
+                }
+            }
+        }
+    }
+
+    // --- NUEVO: Función para ELIMINAR tareas (CRUD Admin) ---
+    fun eliminarTarea(tarea: Tarea) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.eliminarTarea(tarea)
+        }
+    }
+
+    // para limpiar los estados de formulario
+
+    fun limpiarFormularioTarea() {
+        descripcionTarea = ""
+        tipoTarea = ""
+        fechaProgramada = ""
+        responsableIdSeleccionado = null
+        errorDescripcionTarea = null
+        errorTipoTarea = null
+        errorFechaTarea = null
+        errorResponsable = null
+    }
+
+    // --- NUEVO: Función para EDITAR tareas existentes ---
+    fun actualizarTarea(tarea: Tarea, onSuccess: () -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.actualizarTarea(tarea)
+            withContext(Dispatchers.Main) {
                 onSuccess()
             }
         }
+    }
+
+    // Precargar datos en los campos cuando el admin quiere editar una tarea
+    fun prepararEdicion(tarea: Tarea) {
+        descripcionTarea = tarea.descripcion
+        tipoTarea = tarea.tipo
+        fechaProgramada = tarea.fechaProgramada
+        responsableIdSeleccionado = tarea.asignadoA
     }
 
     // --- Campos para la Entrega del Estudiante ---
@@ -144,21 +187,42 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
     var rutaFotografiaEntrega by mutableStateOf<String?>(null)
 
     fun entregarTarea(tareaId: Int, onSuccess: () -> Unit) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val tareaActual = _tareasBase.value.find { it.id == tareaId }
 
             if (tareaActual != null) {
-                val tareaActualizada = tareaActual.copy(
-                    estado = EstadoTarea.PENDIENTE_VALIDACION,
-                    comentarioEstudiante = comentarioEntrega,
-                    rutaFotografia = rutaFotografiaEntrega
-                )
-                repository.actualizarTarea(tareaActualizada)
+                // Si la tarea fue rechazada previamente, creamos un NUEVO registro de envío
+                // para conservar el historial de rechazos y feedback anterior en la BD.
+                if (tareaActual.estado == EstadoTarea.RECHAZADA) {
+                    val nuevaEntrega = Tarea(
+                        tipo = tareaActual.tipo,
+                        descripcion = tareaActual.descripcion,
+                        sectorId = tareaActual.sectorId,
+                        cultivoId = tareaActual.cultivoId,
+                        fechaProgramada = tareaActual.fechaProgramada,
+                        asignadoA = tareaActual.asignadoA,
+                        estado = EstadoTarea.PENDIENTE_VALIDACION,
+                        comentarioEstudiante = comentarioEntrega,
+                        comentarioDocente = null, // Limpiamos para la nueva revisión
+                        rutaFotografia = rutaFotografiaEntrega
+                    )
+                    repository.insertarTarea(nuevaEntrega)
+                } else {
+                    // Si es una tarea pendiente normal, la actualizamos de forma común
+                    val tareaActualizada = tareaActual.copy(
+                        estado = EstadoTarea.PENDIENTE_VALIDACION,
+                        comentarioEstudiante = comentarioEntrega,
+                        rutaFotografia = rutaFotografiaEntrega
+                    )
+                    repository.actualizarTarea(tareaActualizada)
+                }
 
                 comentarioEntrega = ""
                 rutaFotografiaEntrega = null
 
-                onSuccess()
+                withContext(Dispatchers.Main) {
+                    onSuccess()
+                }
             }
         }
     }
@@ -167,7 +231,7 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
     var comentarioValidacion by mutableStateOf("")
 
     fun evaluarTarea(tareaId: Int, aprobada: Boolean, onSuccess: () -> Unit) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val tareaActual = _tareasBase.value.find { it.id == tareaId }
 
             if (tareaActual != null) {
@@ -180,7 +244,9 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
                 repository.actualizarTarea(tareaActualizada)
 
                 comentarioValidacion = ""
-                onSuccess()
+                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    onSuccess()
+                }
             }
         }
     }

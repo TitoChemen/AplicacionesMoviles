@@ -11,23 +11,41 @@ class HuertaRepository(
     private val usuarioDao: UsuarioDao,
     private val alertaDao: AlertaDao
 ) {
-    // Auth / Usuarios
-    suspend fun login(id: String): Usuario? {
-        precargarDatosDePrueba() // garantiza que admin1 y estudiante1 existan
-        return usuarioDao.obtenerUsuarioPorId(id)
+    // 🔐 Auth / Usuarios con validación de contraseña segura
+    suspend fun login(id: String, contrasenaIngresada: String): Usuario? {
+        precargarDatosDePrueba() // Garantiza que admin1 y estudiante1 existan
+        val usuario = usuarioDao.obtenerUsuarioPorId(id)
+
+        // Validamos si el usuario existe y si su contraseña coincide
+        if (usuario != null && usuario.contrasena == contrasenaIngresada) {
+            return usuario
+        }
+        return null // Si falla la clave o no existe, retorna nulo
     }
 
     /**
-     * Inserta usuarios, sectores, cultivo y tareas de prueba.
-     * Es seguro llamarla muchas veces: los usuarios se reemplazan (mismo id)
-     * y el resto solo se crea si todavía no hay tareas.
+     * Inserta usuarios, sectores, cultivo y tareas de prueba con sus respectivas contraseñas.
      */
     suspend fun precargarDatosDePrueba() {
         usuarioDao.insertarUsuario(
-            Usuario("admin1", "Profesor Juan", "ADMINISTRADOR", "Taller de Huerto", "ACTIVA")
+            Usuario(
+                identificador = "admin1",
+                nombreFicticio = "Profesor Juan",
+                perfil = "ADMINISTRADOR",
+                tallerAsignado = "Taller de Huerto",
+                estadoCuenta = "ACTIVA",
+                contrasena = "admin123" // 🔒 Clave segura del Administrador
+            )
         )
         usuarioDao.insertarUsuario(
-            Usuario("estudiante1", "Kevin (Tú)", "ESTUDIANTE", "8vo Básico", "ACTIVA")
+            Usuario(
+                identificador = "estudiante1",
+                nombreFicticio = "Kevin (Tú)",
+                perfil = "ESTUDIANTE",
+                tallerAsignado = "8vo Básico",
+                estadoCuenta = "ACTIVA",
+                contrasena = "alumno123" // 🔒 Clave segura del Estudiante
+            )
         )
 
         if (tareaDao.obtenerTodasLasTareas().isEmpty()) {
@@ -81,14 +99,16 @@ class HuertaRepository(
     fun obtenerHistorialTareas(estudianteId: String) =
         tareaDao.obtenerHistorialTareasEstudiante(estudianteId)
 
-    /** Todas las tareas de un estudiante (pendientes + historial), en tiempo real. */
     fun obtenerTareasDelEstudiante(estudianteId: String): Flow<List<Tarea>> =
         tareaDao.obtenerTareasEstudiante(estudianteId)
 
-    /** Todas las tareas (vista del administrador), en tiempo real. */
     fun obtenerTodasLasTareasFlow(): Flow<List<Tarea>> = tareaDao.obtenerTodasLasTareasFlow()
 
     suspend fun obtenerTodasLasTareas(): List<Tarea> = tareaDao.obtenerTodasLasTareas()
+
+    suspend fun eliminarTarea(tarea: Tarea) {
+        tareaDao.eliminarTarea(tarea)
+    }
 
     suspend fun insertarTarea(tarea: Tarea) {
         tareaDao.insertarTarea(tarea)
@@ -96,6 +116,10 @@ class HuertaRepository(
 
     suspend fun actualizarTarea(tarea: Tarea) {
         tareaDao.actualizarTarea(tarea)
+    }
+
+    suspend fun eliminarSector(sector: Sector) {
+        sectorDao.eliminarSector(sector)
     }
 
     suspend fun marcarTareaComoRealizada(

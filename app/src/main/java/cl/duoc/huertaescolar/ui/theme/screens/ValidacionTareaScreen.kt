@@ -6,8 +6,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,7 +30,7 @@ fun ValidacionTareaScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Revisar Evidencia") },
+                title = { Text("Validar Evidencia de Tarea") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Volver")
@@ -60,83 +58,122 @@ fun ValidacionTareaScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. Resumen de la tarea
-            Text("Detalles de la Tarea", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-            Text("Tipo: ${tarea.tipo}\nDescripción: ${tarea.descripcion}", style = MaterialTheme.typography.bodyMedium)
-
-            Divider()
-
-            // 2. Lo que entregó el estudiante
-            Text("Entrega del Estudiante", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-            Text(
-                text = tarea.comentarioEstudiante ?: "El estudiante no dejó comentarios.",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Light
-            )
-
-            // 3. La Evidencia Fotográfica
+            // 1. INFORMACIÓN GENERAL DE LA TAREA
             Card(
-                modifier = Modifier.fillMaxWidth().height(250.dp),
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Tipo: ${tarea.tipo}",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = tarea.descripcion,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Asignado a: ${tarea.asignadoA}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
+            }
+
+            // 2. SECCIÓN DE EVIDENCIA ENVIADA POR EL ESTUDIANTE
+            Card(
+                modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                if (!tarea.rutaFotografia.isNullOrBlank()) {
-                    AsyncImage(
-                        model = Uri.parse(tarea.rutaFotografia),
-                        contentDescription = "Foto de evidencia",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Evidencia del Estudiante",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.secondary,
+                        fontWeight = FontWeight.Bold
                     )
-                } else {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("No se adjuntó fotografía", color = MaterialTheme.colorScheme.outline)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Comentario del alumno:",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = if (!tarea.comentarioEstudiante.isNullOrBlank()) tarea.comentarioEstudiante!! else "Sin comentarios del alumno.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = "Fotografía Adjunta:",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    if (!tarea.rutaFotografia.isNullOrBlank()) {
+                        AsyncImage(
+                            model = Uri.parse(tarea.rutaFotografia),
+                            contentDescription = "Evidencia fotográfica",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(220.dp),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Text(
+                            text = "No se adjuntó ninguna imagen en esta entrega.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
                     }
                 }
             }
 
-            Divider()
-
-            // 4. Feedback del Docente
-            Text("Evaluación del Docente", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            // 3. CAMPO DE RETROALIMENTACIÓN DEL DOCENTE
             OutlinedTextField(
                 value = viewModel.comentarioValidacion,
                 onValueChange = { viewModel.comentarioValidacion = it },
-                label = { Text("Comentario o Feedback (Opcional)") },
+                label = { Text("Comentario de retroalimentación (Opcional)") },
                 modifier = Modifier.fillMaxWidth(),
-                maxLines = 3
+                minLines = 3
             )
 
-            // 5. Botones de Acción
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 4. BOTONES DE ACCIÓN (Aprobar / Rechazar) BIEN ORDENADOS EN UNA FILA
             Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Botón Rechazar
-                OutlinedButton(
+                Button(
                     onClick = {
-                        viewModel.evaluarTarea(tareaId = tarea.id, aprobada = false) {
+                        viewModel.evaluarTarea(tareaId, aprobada = false) {
                             navController.popBackStack()
                         }
                     },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Icon(Icons.Filled.Cancel, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
                     Text("Rechazar")
                 }
 
-                // Botón Aprobar
                 Button(
                     onClick = {
-                        viewModel.evaluarTarea(tareaId = tarea.id, aprobada = true) {
+                        viewModel.evaluarTarea(tareaId, aprobada = true) {
                             navController.popBackStack()
                         }
                     },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Icon(Icons.Filled.CheckCircle, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
                     Text("Aprobar")
                 }
             }
