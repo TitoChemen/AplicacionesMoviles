@@ -25,7 +25,7 @@ interface TareaDao {
     @Query("SELECT * FROM tareas")
     suspend fun obtenerTodasLasTareas(): List<Tarea>
 
-    @Query("SELECT * FROM tareas") // Cambia "tabla_usuarios" por el nombre real de tu tabla
+    @Query("SELECT * FROM usuarios") // Cambia "tabla_usuarios" por el nombre real de tu tabla
     suspend fun obtenerUsuarios(): List<Usuario>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

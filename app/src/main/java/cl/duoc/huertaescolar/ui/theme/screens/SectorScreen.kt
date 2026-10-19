@@ -15,7 +15,10 @@ import cl.duoc.huertaescolar.viewmodel.SectorViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SectorScreen(viewModel: SectorViewModel) {
+fun SectorScreen(
+    viewModel: SectorViewModel,
+    onNavigateToCamera: () -> Unit // <-- 1. Agregamos el parámetro de navegación
+) {
     val sectores by viewModel.sectores.collectAsState()
 
     // Estado para controlar errores visuales en el formulario
@@ -208,6 +211,19 @@ fun SectorScreen(viewModel: SectorViewModel) {
                             )
                         }
                     }
+                }
+            }
+
+            // SECCIÓN 4: BOTÓN DE NAVEGACIÓN (NUEVO)
+            // Lo ponemos dentro de un "item" para que el LazyColumn lo reconozca
+            item {
+                Button(
+                    onClick = { onNavigateToCamera() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp)
+                ) {
+                    Text("Tomar Foto de Evidencia")
                 }
             }
         }
