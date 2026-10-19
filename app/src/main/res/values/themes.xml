@@ -2,4 +2,12 @@
 <resources>
 
     <style name="Theme.HuertaEscolar" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <!-- El color de fondo de la pantalla de carga -->
+        <item name="windowSplashScreenBackground">#FFFFFF</item>
+        <!-- Usa el logo redondo que acabas de generar en el paso 1 -->
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_round</item>
+        <!-- El tema original que tu app usa después de cargar -->
+        <item name="postSplashScreenTheme">@style/Theme.HuertaEscolar</item>
+    </style>
 </resources>
