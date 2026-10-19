@@ -14,6 +14,8 @@ class HuertaRepository(
     // Auth / Usuarios
     suspend fun login(id: String): Usuario? = usuarioDao.obtenerUsuarioPorId(id)
 
+    suspend fun obtenerUsuarios(): List<Usuario> = usuarioDao.obtenerUsuarios()
+
     // Sectores
     fun obtenerSectores(): Flow<List<Sector>> = sectorDao.obtenerSectores()
     suspend fun insertarSector(sector: Sector) = sectorDao.insertarSector(sector)
@@ -31,8 +33,21 @@ class HuertaRepository(
     fun obtenerHistorialTareas(estudianteId: String) =
         tareaDao.obtenerHistorialTareasEstudiante(estudianteId)
 
+    /** Todas las tareas de un estudiante (pendientes + historial), en tiempo real. */
+    fun obtenerTareasDelEstudiante(estudianteId: String): Flow<List<Tarea>> =
+        tareaDao.obtenerTareasEstudiante(estudianteId)
+
+    /** Todas las tareas (vista del administrador), en tiempo real. */
+    fun obtenerTodasLasTareasFlow(): Flow<List<Tarea>> = tareaDao.obtenerTodasLasTareasFlow()
+
+    suspend fun obtenerTodasLasTareas(): List<Tarea> = tareaDao.obtenerTodasLasTareas()
+
     suspend fun insertarTarea(tarea: Tarea) {
         tareaDao.insertarTarea(tarea)
+    }
+
+    suspend fun actualizarTarea(tarea: Tarea) {
+        tareaDao.actualizarTarea(tarea)
     }
 
     suspend fun marcarTareaComoRealizada(
@@ -53,20 +68,5 @@ class HuertaRepository(
 
     suspend fun registrarAlerta(alerta: Alerta) {
         alertaDao.insertarAlerta(alerta)
-    }
-    // dado por la IA
-    suspend fun loginUsuario(correo: String, contrasena: String): Usuario? {
-        return loginUsuario(correo, contrasena)
-    }
-    suspend fun obtenerTodasLasTareas(): List<Tarea> {
-        return tareaDao.obtenerTodasLasTareas()
-    }
-
-    suspend fun obtenerUsuarios(): List<Usuario> {
-        return usuarioDao.obtenerUsuarios()
-    }
-
-    suspend fun actualizarTarea(tarea: Tarea) {
-        tareaDao.actualizarTarea(tarea)
     }
 }

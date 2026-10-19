@@ -1,7 +1,6 @@
 package cl.duoc.huertaescolar.ui.theme.screens
 
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -54,10 +53,8 @@ fun EvidenciaScreen(
         uriSeleccionada?.let { uri ->
             // TRUCO VITAL (Checklist): Tomar permisos persistentes para que la foto
             // siga cargando si cerramos y volvemos a abrir la app mañana.
-            val flag = Intent.FLAG_GRANT_READ_URI_PERMISSION
-            context.contentResolver.takePersistableUriPermission(uri, flag)
-
-            evidenciaUri = uri
+            // El Photo Picker NO permite permisos persistentes: copiamos la imagen a la app
+            evidenciaUri = copiarImagenAAlmacenamientoInterno(context, uri)
             // Aquí llamarías a: viewModel.guardarUriEvidencia(uri.toString())
         }
     }
@@ -142,4 +139,18 @@ fun crearUriDeArchivo(context: Context): Uri {
         "${context.packageName}.fileprovider", // Revisa que este texto coincida con tu Manifest
         archivo
     )
+}
+
+// Copia una imagen elegida en la galería al almacenamiento interno de la app,
+// para que siga disponible aunque se cierre la app (el Photo Picker solo da acceso temporal).
+fun copiarImagenAAlmacenamientoInterno(context: Context, uri: Uri): Uri? {
+    return try {
+        val destino = File(context.filesDir, "evidencia_${System.currentTimeMillis()}.jpg")
+        context.contentResolver.openInputStream(uri)?.use { entrada ->
+            destino.outputStream().use { salida -> entrada.copyTo(salida) }
+        } ?: return null
+        Uri.fromFile(destino)
+    } catch (e: Exception) {
+        null
+    }
 }

@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Necesario: crearUriDeArchivo() guarda las fotos en context.filesDir -->
+    <files-path
+        name="evidencias_internas"
+        path="." />
     <external-files-path
         name="mis_imagenes_evidencia"
         path="Pictures" />

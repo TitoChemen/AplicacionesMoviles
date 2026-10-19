@@ -1,5 +1,6 @@
 package cl.duoc.huertaescolar.ui.theme.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,7 +18,9 @@ import cl.duoc.huertaescolar.viewmodel.SectorViewModel
 @Composable
 fun SectorScreen(
     viewModel: SectorViewModel,
-    onNavigateToCamera: () -> Unit // <-- 1. Agregamos el parámetro de navegación
+    onNavigateToCamera: () -> Unit,
+    idResponsable: String = "admin1",
+    onSectorClick: (Int) -> Unit = {}
 ) {
     val sectores by viewModel.sectores.collectAsState()
 
@@ -100,7 +103,7 @@ fun SectorScreen(
                         Button(
                             onClick = {
                                 // Le pasamos un 1 temporalmente asumiendo que es el ID del Admin
-                                viewModel.registrarSector(responsableId = 1) {
+                                viewModel.registrarSector(responsableId = idResponsable) {
                                     mensajeExito = "¡Sector registrado con éxito!"
                                     // hasError = false (si es que sigues usando esta variable local)
                                 }
@@ -195,7 +198,9 @@ fun SectorScreen(
             } else {
                 items(sectores) { sector ->
                     Card(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSectorClick(sector.id) },
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {

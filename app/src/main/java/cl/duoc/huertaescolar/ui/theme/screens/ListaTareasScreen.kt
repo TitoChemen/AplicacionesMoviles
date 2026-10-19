@@ -17,6 +17,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import cl.duoc.huertaescolar.data.EstadoTarea
+import cl.duoc.huertaescolar.data.Perfil
 import cl.duoc.huertaescolar.data.local.entity.Tarea
 import cl.duoc.huertaescolar.data.local.entity.Usuario
 import cl.duoc.huertaescolar.viewmodel.TareaViewModel
@@ -30,17 +32,16 @@ fun ListaTareasScreen(
 ) {
     val tareas by viewModel.tareasFiltradas.collectAsState()
     val filtroActual by viewModel.filtroSeleccionado.collectAsState()
+    val esAdmin = usuarioActivo?.perfil == Perfil.ADMINISTRADOR
 
     LaunchedEffect(usuarioActivo) {
         viewModel.cargarTareasSegunRol(usuarioActivo)
     }
-    // Flujo de estados definidos por tu profesor
-    val opcionesFiltro = listOf("Todas", "Pendiente", "En desarrollo", "Pendiente de validación", "Validada", "Rechazada")
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Gestión de Tareas") },
+                title = { Text(if (esAdmin) "Gestión de Tareas" else "Mis Tareas") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Volver")
@@ -53,8 +54,8 @@ fun ListaTareasScreen(
             )
         },
         floatingActionButton = {
-            // Checklist: Restricción de permisos
-            if (usuarioActivo?.perfil == "Administrador") {
+            // Solo el administrador puede crear tareas
+            if (esAdmin) {
                 FloatingActionButton(
                     onClick = { navController.navigate("crear_tarea") },
                     containerColor = MaterialTheme.colorScheme.primary
@@ -76,11 +77,11 @@ fun ListaTareasScreen(
                     .padding(vertical = 8.dp, horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(opcionesFiltro) { opcion ->
+                items(EstadoTarea.filtros) { opcion ->
                     FilterChip(
                         selected = filtroActual == opcion,
                         onClick = { viewModel.actualizarFiltro(opcion) },
-                        label = { Text(opcion) }
+                        label = { Text(EstadoTarea.etiqueta(opcion)) }
                     )
                 }
             }
@@ -88,7 +89,7 @@ fun ListaTareasScreen(
             if (tareas.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        text = "No hay tareas bajo el estado '$filtroActual'.",
+                        text = "No hay tareas bajo el estado '${EstadoTarea.etiqueta(filtroActual)}'.",
                         color = MaterialTheme.colorScheme.outline
                     )
                 }
@@ -99,7 +100,18 @@ fun ListaTareasScreen(
                 ) {
                     items(tareas) { tarea ->
                         TareaCard(tarea = tarea) {
-                            navController.navigate("detalle_tarea/${tarea.id}")
+                            // Admin revisa las entregadas; estudiante entrega las pendientes/rechazadas
+                            if (esAdmin) {
+                                if (tarea.estado == EstadoTarea.PENDIENTE_VALIDACION) {
+                                    navController.navigate("validacion_tarea/${tarea.id}")
+                                }
+                            } else {
+                                if (tarea.estado == EstadoTarea.PENDIENTE ||
+                                    tarea.estado == EstadoTarea.RECHAZADA
+                                ) {
+                                    navController.navigate("detalle_tarea/${tarea.id}")
+                                }
+                            }
                         }
                     }
                 }
@@ -132,7 +144,7 @@ fun TareaCard(tarea: Tarea, onClick: () -> Unit) {
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = tarea.descripcion, // O título de la tarea
+                    text = tarea.descripcion,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -148,7 +160,7 @@ fun TareaCard(tarea: Tarea, onClick: () -> Unit) {
                 shape = MaterialTheme.shapes.small
             ) {
                 Text(
-                    text = tarea.estado,
+                    text = EstadoTarea.etiqueta(tarea.estado),
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                     style = MaterialTheme.typography.labelSmall,
                     color = obtenerColorPorEstado(tarea.estado),
@@ -159,15 +171,14 @@ fun TareaCard(tarea: Tarea, onClick: () -> Unit) {
     }
 }
 
-// Checklist: Definir colores semánticos para estados
+// Colores semánticos para estados
 @Composable
 fun obtenerColorPorEstado(estado: String): Color {
     return when (estado) {
-        "Pendiente" -> Color(0xFFFFA000) // Naranja (Advertencia)
-        "En desarrollo" -> Color(0xFF29B6F6) // Celeste (Información)
-        "Pendiente de validación" -> Color(0xFFAB47BC) // Morado (Revisión)
-        "Validada" -> Color(0xFF4CAF50) // Verde (Éxito)
-        "Rechazada" -> MaterialTheme.colorScheme.error // Rojo (Error)
+        EstadoTarea.PENDIENTE -> Color(0xFFFFA000) // Naranja (Advertencia)
+        EstadoTarea.PENDIENTE_VALIDACION -> Color(0xFFAB47BC) // Morado (Revisión)
+        EstadoTarea.VALIDADA -> Color(0xFF4CAF50) // Verde (Éxito)
+        EstadoTarea.RECHAZADA -> MaterialTheme.colorScheme.error // Rojo (Error)
         else -> MaterialTheme.colorScheme.outline
     }
 }

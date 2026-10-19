@@ -26,7 +26,7 @@ fun ValidacionTareaScreen(
     viewModel: TareaViewModel,
     tareaId: Int
 ) {
-    val tareas by viewModel.tareasFiltradas.collectAsState()
+    val tareas by viewModel.todasLasTareas.collectAsState()
     val tarea = tareas.find { it.id == tareaId }
 
     Scaffold(

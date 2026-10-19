@@ -16,7 +16,7 @@ import cl.duoc.huertaescolar.viewmodel.SectorViewModel
 fun CrearSectorScreen(
     navController: NavController,
     viewModel: SectorViewModel,
-    idAdministradorActivo: Int // Pasado desde el AuthViewModel en el NavHost
+    idAdministradorActivo: String // Pasado desde el AuthViewModel en el NavHost
 ) {
     var mensajeExito by remember { mutableStateOf("") }
 

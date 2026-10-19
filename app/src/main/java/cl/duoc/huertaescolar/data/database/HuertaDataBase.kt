@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
         Tarea::class,
         Alerta::class
     ],
-    version = 3, // Incrementado a 3 para aplicar el cambio con fallbackToDestructiveMigration
+    version = 4, // Incrementado para recrear la BD con los nuevos datos de prueba
     exportSchema = false
 )
 abstract class HuertaDatabase : RoomDatabase() {
@@ -54,6 +54,24 @@ abstract class HuertaDatabase : RoomDatabase() {
                 super.onCreate(db)
                 INSTANCE?.let { database ->
                     CoroutineScope(Dispatchers.IO).launch {
+                        // Sectores y cultivo de prueba (las tareas los referencian)
+                        database.sectorDao().insertarSector(
+                            Sector(id = 1, codigo = "SEC-001", nombre = "Huerto Principal",
+                                descripcion = "Almácigos y hortalizas de hoja", ubicacion = "Patio norte",
+                                estado = "ACTIVO", fechaCreacion = "2026-03-01", responsableId = "admin1")
+                        )
+                        database.sectorDao().insertarSector(
+                            Sector(id = 2, codigo = "SEC-002", nombre = "Huerto Secundario",
+                                descripcion = "Lechugas y hierbas", ubicacion = "Patio sur",
+                                estado = "ACTIVO", fechaCreacion = "2026-03-01", responsableId = "admin1")
+                        )
+                        database.cultivoDao().insertarCultivo(
+                            Cultivo(id = 1, sectorId = 1, nombreComun = "Tomate Cherry",
+                                descripcion = "Almácigos de tomate", fechaSiembra = "2026-03-01",
+                                fechaCosechaEstimada = "2026-06-01", frecuenciaRiego = "Diario",
+                                estadoDesarrollo = "CRECIMIENTO")
+                        )
+
                         // Precargamos un usuario Admin y un Estudiante por defecto para las pruebas
                         database.usuarioDao().insertarUsuario(
                             Usuario("admin1", "Profesor Juan", "ADMINISTRADOR", "Taller de Huerto", "ACTIVA")

@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import cl.duoc.huertaescolar.data.Perfil
 import cl.duoc.huertaescolar.data.local.entity.Usuario
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -59,7 +60,7 @@ fun DashboardScreen(
             }
 
             // Renderizado dinámico según el rol (Checklist: Mostrar un Dashboard diferente según el rol)
-            if (usuario?.perfil == "Administrador") {
+            if (usuario?.perfil == Perfil.ADMINISTRADOR) {
                 MenuAdministrador(navController)
             } else {
                 MenuEstudiante(navController)

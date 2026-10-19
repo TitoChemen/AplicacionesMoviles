@@ -48,7 +48,7 @@ class SectorViewModel(application: Application) : AndroidViewModel(application) 
     var temperaturaSimulada by mutableStateOf(23.5)
     var humedadSimulada by mutableStateOf(68.0)
 
-    fun registrarSector(responsableId: Int, onSuccess: () -> Unit) {
+    fun registrarSector(responsableId: String, onSuccess: () -> Unit) {
         // 1. Limpiar errores previos
         errorNombreSector = null
         errorUbicacionSector = null
@@ -76,7 +76,7 @@ class SectorViewModel(application: Application) : AndroidViewModel(application) 
                     ubicacion = ubicacionSector, // Usamos la variable real
                     estado = "ACTIVO",
                     fechaCreacion = System.currentTimeMillis().toString(), // Fecha dinámica
-                    responsableId = responsableId.toString() // ID real del admin que lo crea
+                    responsableId = responsableId // Identificador real del admin que lo crea
                 )
                 repository.insertarSector(nuevoSector)
 

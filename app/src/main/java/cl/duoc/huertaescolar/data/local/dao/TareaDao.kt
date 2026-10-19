@@ -22,6 +22,12 @@ interface TareaDao {
     @Query("SELECT * FROM tareas WHERE asignadoA = :estudianteId AND estado != 'PENDIENTE' ORDER BY id DESC")
     fun obtenerHistorialTareasEstudiante(estudianteId: String): Flow<List<Tarea>>
 
+    @Query("SELECT * FROM tareas WHERE asignadoA = :estudianteId ORDER BY id DESC")
+    fun obtenerTareasEstudiante(estudianteId: String): Flow<List<Tarea>>
+
+    @Query("SELECT * FROM tareas ORDER BY id DESC")
+    fun obtenerTodasLasTareasFlow(): Flow<List<Tarea>>
+
     @Query("SELECT * FROM tareas")
     suspend fun obtenerTodasLasTareas(): List<Tarea>
 

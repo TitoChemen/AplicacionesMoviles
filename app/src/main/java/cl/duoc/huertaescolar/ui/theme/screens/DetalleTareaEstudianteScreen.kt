@@ -1,6 +1,5 @@
 package cl.duoc.huertaescolar.ui.theme.screens
 
-import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -32,7 +31,7 @@ fun DetalleTareaEstudianteScreen(
     tareaId: Int
 ) {
     val context = LocalContext.current
-    val tareas by viewModel.tareasFiltradas.collectAsState()
+    val tareas by viewModel.todasLasTareas.collectAsState()
     val tarea = tareas.find { it.id == tareaId }
 
     // Uri temporal para cuando se usa la cámara
@@ -52,9 +51,8 @@ fun DetalleTareaEstudianteScreen(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uriSeleccionada ->
         uriSeleccionada?.let { uri ->
-            val flag = Intent.FLAG_GRANT_READ_URI_PERMISSION
-            context.contentResolver.takePersistableUriPermission(uri, flag)
-            viewModel.rutaFotografiaEntrega = uri.toString()
+            // El Photo Picker NO permite permisos persistentes: copiamos la imagen a la app
+            viewModel.rutaFotografiaEntrega = copiarImagenAAlmacenamientoInterno(context, uri)?.toString()
         }
     }
 
@@ -119,7 +117,7 @@ fun DetalleTareaEstudianteScreen(
             ) {
                 if (viewModel.rutaFotografiaEntrega != null) {
                     AsyncImage(
-                        model = Uri.parse(viewModel.rutaFotografiaEntrega),
+                        model = viewModel.rutaFotografiaEntrega?.let { Uri.parse(it) },
                         contentDescription = "Evidencia seleccionada",
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
