@@ -2,6 +2,7 @@ package cl.duoc.huertaescolar.ui.theme.screens
 
 import android.content.Context
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -18,14 +19,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.navigation.NavController
+import cl.duoc.huertaescolar.viewmodel.TareaViewModel
 import coil.compose.AsyncImage
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EvidenciaScreen(
+    tareaId: Int,
     navController: NavController,
-    // viewModel: TareaViewModel // Aquí pasarás tu ViewModel para guardar la URI final
+    viewModel: TareaViewModel
 ) {
     val context = LocalContext.current
 
@@ -35,27 +38,27 @@ fun EvidenciaScreen(
     // Variable temporal para decirle a la cámara DÓNDE guardar la foto en alta calidad
     var uriTemporalParaCamara by remember { mutableStateOf<Uri?>(null) }
 
-    // 1. Launcher de la Cámara Nativa (Checklist)
+    // Estado para el comentario de la tarea
+    var comentario by remember { mutableStateOf("") }
+
+    // 1. Launcher de la Cámara Nativa
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { exito ->
         if (exito) {
-            // Si la foto se tomó bien, pasamos la URI temporal al estado principal
             evidenciaUri = uriTemporalParaCamara
-            // Aquí llamarías a: viewModel.guardarUriEvidencia(evidenciaUri.toString())
+        } else {
+            Toast.makeText(context, "Captura de foto cancelada", Toast.LENGTH_SHORT).show()
         }
     }
 
-    // 2. Launcher de la Galería (Checklist: Photo Picker)
+    // 2. Launcher de la Galería (Photo Picker)
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uriSeleccionada ->
         uriSeleccionada?.let { uri ->
-            // TRUCO VITAL (Checklist): Tomar permisos persistentes para que la foto
-            // siga cargando si cerramos y volvemos a abrir la app mañana.
-            // El Photo Picker NO permite permisos persistentes: copiamos la imagen a la app
+            // Copiamos la imagen al almacenamiento interno para permisos persistentes
             evidenciaUri = copiarImagenAAlmacenamientoInterno(context, uri)
-            // Aquí llamarías a: viewModel.guardarUriEvidencia(uri.toString())
         }
     }
 
@@ -70,11 +73,11 @@ fun EvidenciaScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Checklist: Mostrar una vista previa de las imágenes
+            // Vista previa de la imagen cargada
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(300.dp),
+                    .height(260.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 if (evidenciaUri != null) {
@@ -91,6 +94,7 @@ fun EvidenciaScreen(
                 }
             }
 
+            // Botones de captura / selección
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
@@ -111,7 +115,6 @@ fun EvidenciaScreen(
                 // Botón Cámara
                 Button(
                     onClick = {
-                        // Creamos un archivo temporal y su URI segura usando FileProvider
                         uriTemporalParaCamara = crearUriDeArchivo(context)
                         uriTemporalParaCamara?.let { uri ->
                             cameraLauncher.launch(uri)
@@ -123,26 +126,54 @@ fun EvidenciaScreen(
                     Text("Cámara")
                 }
             }
+
+            // Input para el comentario del estudiante
+            OutlinedTextField(
+                value = comentario,
+                onValueChange = { comentario = it },
+                label = { Text("Comentario de la tarea (opcional)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = false,
+                maxLines = 3
+            )
+
+            Spacer(Modifier.weight(1f))
+
+            // Botón para guardar en la base de datos Room a través del Repositorio
+            Button(
+                enabled = evidenciaUri != null,
+                onClick = {
+                    evidenciaUri?.let { uri ->
+                        viewModel.guardarEvidenciaPorId(
+                            tareaId = tareaId,
+                            comentario = comentario,
+                            rutaFoto = uri.toString()
+                        )
+                        Toast.makeText(context, "Evidencia guardada con éxito", Toast.LENGTH_SHORT).show()
+                        navController.popBackStack()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Guardar Evidencia y Finalizar Tarea")
+            }
         }
     }
 }
 
 // Función auxiliar para generar un archivo temporal seguro para la cámara
 fun crearUriDeArchivo(context: Context): Uri {
-    // Generamos un nombre único basado en la fecha
     val nombreArchivo = "evidencia_${System.currentTimeMillis()}.jpg"
     val archivo = File(context.filesDir, nombreArchivo)
 
-    // IMPORTANTE: El "authority" debe coincidir con el que pusiste en tu AndroidManifest.xml
     return FileProvider.getUriForFile(
         context,
-        "${context.packageName}.fileprovider", // Revisa que este texto coincida con tu Manifest
+        "${context.packageName}.fileprovider",
         archivo
     )
 }
 
-// Copia una imagen elegida en la galería al almacenamiento interno de la app,
-// para que siga disponible aunque se cierre la app (el Photo Picker solo da acceso temporal).
+// Copia una imagen elegida en la galería al almacenamiento interno de la app
 fun copiarImagenAAlmacenamientoInterno(context: Context, uri: Uri): Uri? {
     return try {
         val destino = File(context.filesDir, "evidencia_${System.currentTimeMillis()}.jpg")

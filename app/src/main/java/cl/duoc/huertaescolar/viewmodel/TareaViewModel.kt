@@ -38,15 +38,14 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    // 1. Filtro seleccionado (por defecto, todas)
+    // 1. Filtro seleccionado (por defecto, TODAS)
     private val _filtroSeleccionado = MutableStateFlow(EstadoTarea.TODAS)
     val filtroSeleccionado: StateFlow<String> = _filtroSeleccionado.asStateFlow()
 
     // 2. Lista base (sin filtrar) según el rol del usuario activo
     private val _tareasBase = MutableStateFlow<List<Tarea>>(emptyList())
-    val todasLasTareas: StateFlow<List<Tarea>> = _tareasBase.asStateFlow()
 
-    // 3. Lista filtrada: la lista de tareas observa este flujo
+    // 3. Lista filtrada: la lista de tareas en la UI observa este flujo
     val tareasFiltradas: StateFlow<List<Tarea>> =
         combine(_tareasBase, _filtroSeleccionado) { lista, filtro ->
             if (filtro == EstadoTarea.TODAS) lista else lista.filter { it.estado == filtro }
@@ -56,8 +55,7 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
         _filtroSeleccionado.value = nuevoFiltro
     }
 
-
-    // 4. Decide qué datos traer según el rol (administrador: todas; estudiante: las suyas)
+    // 4. Carga tareas segun rol (Admin: todas; Estudiante: sus tareas)
     private var jobTareas: Job? = null
 
     fun cargarTareasSegunRol(usuarioActivo: Usuario?) {
@@ -79,19 +77,19 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // --- Campos del formulario Crear Tarea ---
+    // --- Campos del formulario Crear / Editar Tarea ---
     var descripcionTarea by mutableStateOf("")
-    var tipoTarea by mutableStateOf("") // Ej: Riego, Siembra, Mantenimiento
+    var tipoTarea by mutableStateOf("")
     var fechaProgramada by mutableStateOf("")
     var responsableIdSeleccionado by mutableStateOf<String?>(null)
 
-    // Estados de error
+    // Estados de error para validaciones
     var errorDescripcionTarea by mutableStateOf<String?>(null)
     var errorTipoTarea by mutableStateOf<String?>(null)
     var errorFechaTarea by mutableStateOf<String?>(null)
     var errorResponsable by mutableStateOf<String?>(null)
 
-    // Lista de estudiantes para el menú desplegable
+    // Lista de estudiantes para el desplegable de asignación
     private val _estudiantesDisponibles = MutableStateFlow<List<Usuario>>(emptyList())
     val estudiantesDisponibles: StateFlow<List<Usuario>> = _estudiantesDisponibles.asStateFlow()
 
@@ -121,7 +119,7 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
                 val nuevaTarea = Tarea(
                     tipo = tipoTarea,
                     descripcion = descripcionTarea,
-                    sectorId = 1, // Por defecto el sector 1 (precargado)
+                    sectorId = 1,
                     cultivoId = null,
                     fechaProgramada = fechaProgramada,
                     asignadoA = responsableIdSeleccionado ?: "",
@@ -131,27 +129,20 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
                     rutaFotografia = null
                 )
                 repository.insertarTarea(nuevaTarea)
+                limpiarFormularioTarea()
 
-                descripcionTarea = ""
-                tipoTarea = ""
-                fechaProgramada = ""
-                responsableIdSeleccionado = null
-
-                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                withContext(Dispatchers.Main) {
                     onSuccess()
                 }
             }
         }
     }
 
-    // --- NUEVO: Función para ELIMINAR tareas (CRUD Admin) ---
     fun eliminarTarea(tarea: Tarea) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.eliminarTarea(tarea)
         }
     }
-
-    // para limpiar los estados de formulario
 
     fun limpiarFormularioTarea() {
         descripcionTarea = ""
@@ -164,7 +155,6 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
         errorResponsable = null
     }
 
-    // --- NUEVO: Función para EDITAR tareas existentes ---
     fun actualizarTarea(tarea: Tarea, onSuccess: () -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.actualizarTarea(tarea)
@@ -174,7 +164,6 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // Precargar datos en los campos cuando el admin quiere editar una tarea
     fun prepararEdicion(tarea: Tarea) {
         descripcionTarea = tarea.descripcion
         tipoTarea = tarea.tipo
@@ -182,52 +171,7 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
         responsableIdSeleccionado = tarea.asignadoA
     }
 
-    // --- Campos para la Entrega del Estudiante ---
-    var comentarioEntrega by mutableStateOf("")
-    var rutaFotografiaEntrega by mutableStateOf<String?>(null)
-
-    fun entregarTarea(tareaId: Int, onSuccess: () -> Unit) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val tareaActual = _tareasBase.value.find { it.id == tareaId }
-
-            if (tareaActual != null) {
-                // Si la tarea fue rechazada previamente, creamos un NUEVO registro de envío
-                // para conservar el historial de rechazos y feedback anterior en la BD.
-                if (tareaActual.estado == EstadoTarea.RECHAZADA) {
-                    val nuevaEntrega = Tarea(
-                        tipo = tareaActual.tipo,
-                        descripcion = tareaActual.descripcion,
-                        sectorId = tareaActual.sectorId,
-                        cultivoId = tareaActual.cultivoId,
-                        fechaProgramada = tareaActual.fechaProgramada,
-                        asignadoA = tareaActual.asignadoA,
-                        estado = EstadoTarea.PENDIENTE_VALIDACION,
-                        comentarioEstudiante = comentarioEntrega,
-                        comentarioDocente = null, // Limpiamos para la nueva revisión
-                        rutaFotografia = rutaFotografiaEntrega
-                    )
-                    repository.insertarTarea(nuevaEntrega)
-                } else {
-                    // Si es una tarea pendiente normal, la actualizamos de forma común
-                    val tareaActualizada = tareaActual.copy(
-                        estado = EstadoTarea.PENDIENTE_VALIDACION,
-                        comentarioEstudiante = comentarioEntrega,
-                        rutaFotografia = rutaFotografiaEntrega
-                    )
-                    repository.actualizarTarea(tareaActualizada)
-                }
-
-                comentarioEntrega = ""
-                rutaFotografiaEntrega = null
-
-                withContext(Dispatchers.Main) {
-                    onSuccess()
-                }
-            }
-        }
-    }
-
-    // --- Campos para la Validación del Docente ---
+    // --- Validación / Evaluación por parte del Docente ---
     var comentarioValidacion by mutableStateOf("")
 
     fun evaluarTarea(tareaId: Int, aprobada: Boolean, onSuccess: () -> Unit) {
@@ -244,9 +188,20 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
                 repository.actualizarTarea(tareaActualizada)
 
                 comentarioValidacion = ""
-                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                withContext(Dispatchers.Main) {
                     onSuccess()
                 }
+            }
+        }
+    }
+
+    // --- Registro de Evidencia Fotográfica (Invocado desde EvidenciaScreen) ---
+    fun guardarEvidenciaPorId(tareaId: Int, comentario: String?, rutaFoto: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val tareas = repository.obtenerTodasLasTareas()
+            val tareaEncontrada = tareas.find { it.id == tareaId }
+            tareaEncontrada?.let { tarea ->
+                repository.marcarTareaComoRealizada(tarea, comentario, rutaFoto)
             }
         }
     }

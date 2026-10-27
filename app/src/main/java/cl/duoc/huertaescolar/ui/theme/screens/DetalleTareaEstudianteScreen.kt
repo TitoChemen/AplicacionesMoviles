@@ -1,27 +1,19 @@
 package cl.duoc.huertaescolar.ui.theme.screens
 
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import cl.duoc.huertaescolar.viewmodel.TareaViewModel
-import coil.compose.AsyncImage
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,36 +22,14 @@ fun DetalleTareaEstudianteScreen(
     viewModel: TareaViewModel,
     tareaId: Int
 ) {
-    val context = LocalContext.current
-    val tareas by viewModel.todasLasTareas.collectAsState()
+    // Escuchamos el flujo de tareas filtradas según el rol activo
+    val tareas by viewModel.tareasFiltradas.collectAsState()
     val tarea = tareas.find { it.id == tareaId }
-
-    // Uri temporal para cuando se usa la cámara
-    var uriTemporalParaCamara by remember { mutableStateOf<Uri?>(null) }
-
-    // Lanzador para la Cámara
-    val cameraLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicture()
-    ) { exito ->
-        if (exito) {
-            viewModel.rutaFotografiaEntrega = uriTemporalParaCamara.toString()
-        }
-    }
-
-    // Lanzador para la Galería
-    val galleryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uriSeleccionada ->
-        uriSeleccionada?.let { uri ->
-            // El Photo Picker NO permite permisos persistentes: copiamos la imagen a la app
-            viewModel.rutaFotografiaEntrega = copiarImagenAAlmacenamientoInterno(context, uri)?.toString()
-        }
-    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Entregar Tarea") },
+                title = { Text("Detalle de Tarea") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Volver")
@@ -73,7 +43,7 @@ fun DetalleTareaEstudianteScreen(
         }
     ) { paddingValues ->
         if (tarea == null) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
             return@Scaffold
@@ -95,80 +65,53 @@ fun DetalleTareaEstudianteScreen(
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(text = "Tipo: ${tarea.tipo}", style = MaterialTheme.typography.titleMedium)
                     Text(text = "Descripción: ${tarea.descripcion}", style = MaterialTheme.typography.bodyLarge)
-                    Text(text = "Fecha Límite: ${tarea.fechaProgramada}", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
-                }
-            }
-
-            // 2. Campo para comentarios del estudiante
-            OutlinedTextField(
-                value = viewModel.comentarioEntrega,
-                onValueChange = { viewModel.comentarioEntrega = it },
-                label = { Text("Comentarios sobre la ejecución") },
-                modifier = Modifier.fillMaxWidth(),
-                maxLines = 4
-            )
-
-            // 3. Área de Evidencia Fotográfica
-            Text(text = "Evidencia Fotográfica", style = MaterialTheme.typography.titleSmall)
-
-            Card(
-                modifier = Modifier.fillMaxWidth().height(250.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                if (viewModel.rutaFotografiaEntrega != null) {
-                    AsyncImage(
-                        model = viewModel.rutaFotografiaEntrega?.let { Uri.parse(it) },
-                        contentDescription = "Evidencia seleccionada",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+                    Text(
+                        text = "Fecha Programada: ${tarea.fechaProgramada}",
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Bold
                     )
-                } else {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Ninguna foto adjuntada", color = MaterialTheme.colorScheme.outline)
+                    Text(
+                        text = "Estado actual: ${tarea.estado}",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            // 2. Si el docente la rechazó previamente, se muestra el motivo
+            if (!tarea.comentarioDocente.isNullOrBlank()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Observaciones del Profesor:",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = tarea.comentarioDocente ?: "",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
                     }
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                FilledTonalButton(
-                    onClick = {
-                        galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    }
-                ) {
-                    Icon(Icons.Filled.PhotoLibrary, contentDescription = "Galería")
-                    Spacer(Modifier.width(8.dp))
-                    Text("Galería")
-                }
+            Spacer(modifier = Modifier.weight(1f))
 
-                Button(
-                    onClick = {
-                        uriTemporalParaCamara = crearUriDeArchivo(context)
-                        uriTemporalParaCamara?.let { uri -> cameraLauncher.launch(uri) }
-                    }
-                ) {
-                    Icon(Icons.Filled.CameraAlt, contentDescription = "Cámara")
-                    Spacer(Modifier.width(8.dp))
-                    Text("Cámara")
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // 4. Botón de Entrega Final
+            // 3. Botón para redirigir a la captura de Evidencia (Cámara / Galería)
             Button(
                 onClick = {
-                    viewModel.entregarTarea(tareaId = tarea.id) {
-                        navController.popBackStack() // Volvemos a la lista de tareas tras el éxito
-                    }
+                    navController.navigate("evidencia/${tarea.id}")
                 },
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-                // Solo habilitamos el botón si subió foto y escribió algo
-                enabled = viewModel.comentarioEntrega.isNotBlank() && viewModel.rutaFotografiaEntrega != null
+                modifier = Modifier.fillMaxWidth().height(50.dp)
             ) {
-                Text("Entregar Tarea")
+                Icon(Icons.Filled.CameraAlt, contentDescription = "Cámara")
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Subir Evidencia y Completar Tarea")
             }
         }
     }

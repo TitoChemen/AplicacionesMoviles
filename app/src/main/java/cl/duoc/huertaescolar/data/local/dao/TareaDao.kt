@@ -33,4 +33,7 @@ interface TareaDao {
 
     @Delete
     suspend fun eliminarTarea(tarea: Tarea) // <-- ¡Esta es la que faltaba para borrar tareas!
+
+    @Query("UPDATE tareas SET rutaFotografia = :rutaFoto, estado = 'PENDIENTE_VALIDACION' WHERE id = :tareaId")
+    suspend fun actualizarEvidenciaFoto(tareaId: Int, rutaFoto: String)
 }

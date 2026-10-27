@@ -45,9 +45,9 @@ abstract class HuertaDatabase : RoomDatabase() {
                     .addCallback(object : RoomDatabase.Callback() {
                         override fun onCreate(db: SupportSQLiteDatabase) {
                             super.onCreate(db)
-                            // 🌱 Insertamos los usuarios iniciales con contraseña al crear la BD
                             INSTANCE?.let { database ->
                                 CoroutineScope(Dispatchers.IO).launch {
+                                    // Usuarios
                                     database.usuarioDao().insertarUsuario(
                                         Usuario(
                                             identificador = "admin1",
@@ -55,7 +55,7 @@ abstract class HuertaDatabase : RoomDatabase() {
                                             perfil = "ADMINISTRADOR",
                                             tallerAsignado = "Huerto Escolar Central",
                                             estadoCuenta = "ACTIVA",
-                                            contrasena = "admin123" // 🔒 Clave segura del profe
+                                            contrasena = "admin123"
                                         )
                                     )
                                     database.usuarioDao().insertarUsuario(
@@ -65,7 +65,34 @@ abstract class HuertaDatabase : RoomDatabase() {
                                             perfil = "ESTUDIANTE",
                                             tallerAsignado = "Cultivos Urbanos",
                                             estadoCuenta = "ACTIVA",
-                                            contrasena = "alumno123" // 🔒 Clave segura del alumno
+                                            contrasena = "alumno123"
+                                        )
+                                    )
+                                    // Sector Semilla (Para que no esté vacío)
+                                    database.sectorDao().insertarSector(
+                                        Sector(
+                                            id = 1,
+                                            codigo = "SEC-001",
+                                            nombre = "Sector Invernadero A",
+                                            descripcion = "Sector dedicado al cultivo de tomates y lechugas",
+                                            ubicacion = "Zona Norte - Invernadero Principal",
+                                            estado = "ACTIVO",
+                                            fechaCreacion = "2026-10-27",
+                                            responsableId = "estudiante1"
+                                        )
+                                    )
+
+                                    // Tarea Semilla (Para probar la lista de inmediato)
+                                    database.tareaDao().insertarTarea(
+                                        Tarea(
+                                            id = 1,
+                                            tipo = "RIEGO",
+                                            descripcion = "Regar el sector A en la mañana",
+                                            sectorId = 1,
+                                            cultivoId = null,
+                                            fechaProgramada = "2026-10-28",
+                                            asignadoA = "estudiante1",
+                                            estado = "PENDIENTE"
                                         )
                                     )
                                 }

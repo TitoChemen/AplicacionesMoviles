@@ -23,7 +23,7 @@ import cl.duoc.huertaescolar.viewmodel.TareaViewModel
 fun HuertaAppNavigation() {
     val navController = rememberNavController()
 
-    // ViewModels compartidos entre pantallas (sobreviven a los cambios de pantalla)
+    // ViewModels compartidos entre pantallas
     val authViewModel: AuthViewModel = viewModel()
     val sectorViewModel: SectorViewModel = viewModel()
     val tareaViewModel: TareaViewModel = viewModel()
@@ -38,7 +38,6 @@ fun HuertaAppNavigation() {
             LoginScreen(
                 error = loginError,
                 onLogin = { identificadorIngresado, contrasenaIngresada ->
-                    // 🔑 Le pasamos ambos parámetros a la función login del AuthViewModel
                     authViewModel.login(identificadorIngresado, contrasenaIngresada) {
                         val usuarioActual = authViewModel.usuarioActivo.value
                         if (usuarioActual?.perfil == "ADMINISTRADOR") {
@@ -86,7 +85,7 @@ fun HuertaAppNavigation() {
             )
         }
 
-        // --- Dashboard genérico por si acaso ---
+        // --- Dashboard genérico ---
         composable("dashboard") {
             DashboardScreen(
                 usuario = usuario,
@@ -104,7 +103,7 @@ fun HuertaAppNavigation() {
         composable("lista_sectores") {
             SectorScreen(
                 viewModel = sectorViewModel,
-                onNavigateToCamera = { navController.navigate("camara_evidencia") },
+                onNavigateToCamera = { navController.navigate("evidencia/1") },
                 onBackClick = { navController.popBackStack() },
                 idResponsable = usuario?.identificador ?: "admin1",
                 onSectorClick = { id -> navController.navigate("detalle_sector/$id") }
@@ -173,8 +172,16 @@ fun HuertaAppNavigation() {
         }
 
         // --- Evidencia (cámara / galería) ---
-        composable("camara_evidencia") {
-            EvidenciaScreen(navController = navController)
+        composable(
+            route = "evidencia/{tareaId}",
+            arguments = listOf(navArgument("tareaId") { type = NavType.IntType })
+        ) { entry ->
+            val tareaId = entry.arguments?.getInt("tareaId") ?: 0
+            EvidenciaScreen(
+                tareaId = tareaId,
+                navController = navController,
+                viewModel = tareaViewModel
+            )
         }
 
         // --- Pantallas aún no implementadas ---

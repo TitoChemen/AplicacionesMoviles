@@ -24,7 +24,8 @@ fun ValidacionTareaScreen(
     viewModel: TareaViewModel,
     tareaId: Int
 ) {
-    val tareas by viewModel.todasLasTareas.collectAsState()
+    // Leemos las tareas usando tareasFiltradas para evitar la referencia nula
+    val tareas by viewModel.tareasFiltradas.collectAsState()
     val tarea = tareas.find { it.id == tareaId }
 
     Scaffold(
@@ -44,7 +45,7 @@ fun ValidacionTareaScreen(
         }
     ) { paddingValues ->
         if (tarea == null) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
             return@Scaffold
@@ -104,7 +105,7 @@ fun ValidacionTareaScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = if (!tarea.comentarioEstudiante.isNullOrBlank()) tarea.comentarioEstudiante!! else "Sin comentarios del alumno.",
+                        text = if (!tarea.comentarioEstudiante.isNullOrBlank()) tarea.comentarioEstudiante else "Sin comentarios del alumno.",
                         style = MaterialTheme.typography.bodyMedium
                     )
 
@@ -148,7 +149,7 @@ fun ValidacionTareaScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 4. BOTONES DE ACCIÓN (Aprobar / Rechazar) BIEN ORDENADOS EN UNA FILA
+            // 4. BOTONES DE ACCIÓN (Aprobar / Rechazar)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
