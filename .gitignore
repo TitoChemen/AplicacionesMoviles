@@ -1,15 +1,35 @@
+# Gradle / Android
+.gradle/
+**/.gradle/
+**/build/
+**/local.properties
+*.apk
+*.aab
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+
+# Android Studio / IntelliJ
+.idea/
+**/.idea/
+
+# Java / Spring Boot
+**/target/
+*.class
+
+# Credenciales y configuraciones privadas
+.env
+.env.*
+!.env.example
+**/application-local.properties
+**/application-local.yml
+**/application-local.yaml
+**/application-secret.properties
+**/application-secret.yml
+**/application-secret.yaml
+*.jks
+*.keystore
+*.p12
+
+# Archivos temporales
+*.log
 .DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-local.properties
+Thumbs.db

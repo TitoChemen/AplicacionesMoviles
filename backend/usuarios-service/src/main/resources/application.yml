@@ -1,0 +1,24 @@
+
+spring:
+  application:
+    name: usuarios-service
+
+  datasource:
+    url: jdbc:mariadb://localhost:3306/huerta_usuarios
+    username: root
+    password: ${DB_PASSWORD}
+    driver-class-name: org.mariadb.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+server:
+  port: 8081
+
+app:
+  jwt:
+    issuer: huerta-escolar
+    secret: ${JWT_SECRET}
+    expiration-minutes: 120
