@@ -1,3 +1,4 @@
+
 package cl.duoc.huertaescolar.ui.theme.screens
 
 import android.content.Context
@@ -7,7 +8,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.*
@@ -28,143 +32,332 @@ import java.io.File
 fun EvidenciaScreen(
     tareaId: Int,
     navController: NavController,
-    viewModel: TareaViewModel
+    viewModel: TareaViewModel,
+    accessToken: String?
 ) {
     val context = LocalContext.current
 
-    // Estado para guardar la URI de la imagen seleccionada o capturada
-    var evidenciaUri by remember { mutableStateOf<Uri?>(null) }
+    // Imagen seleccionada o capturada
+    var evidenciaUri by remember {
+        mutableStateOf<Uri?>(null)
+    }
 
-    // Variable temporal para decirle a la cámara DÓNDE guardar la foto en alta calidad
-    var uriTemporalParaCamara by remember { mutableStateOf<Uri?>(null) }
+    // URI temporal para la cámara
+    var uriTemporalParaCamara by remember {
+        mutableStateOf<Uri?>(null)
+    }
 
-    // Estado para el comentario de la tarea
-    var comentario by remember { mutableStateOf("") }
+    // Comentario del estudiante
+    var comentario by remember {
+        mutableStateOf("")
+    }
 
-    // 1. Launcher de la Cámara Nativa
+    // Evitar envíos duplicados
+    var guardando by remember {
+        mutableStateOf(false)
+    }
+
+    // ==========================================
+    // CÁMARA
+    // ==========================================
+
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { exito ->
+
         if (exito) {
             evidenciaUri = uriTemporalParaCamara
         } else {
-            Toast.makeText(context, "Captura de foto cancelada", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                context,
+                "Captura de foto cancelada",
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
-    // 2. Launcher de la Galería (Photo Picker)
+    // ==========================================
+    // GALERÍA
+    // ==========================================
+
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uriSeleccionada ->
+
         uriSeleccionada?.let { uri ->
-            // Copiamos la imagen al almacenamiento interno para permisos persistentes
-            evidenciaUri = copiarImagenAAlmacenamientoInterno(context, uri)
+
+            evidenciaUri = copiarImagenAAlmacenamientoInterno(
+                context = context,
+                uri = uri
+            )
+
+            if (evidenciaUri == null) {
+                Toast.makeText(
+                    context,
+                    "No se pudo cargar la imagen",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         }
     }
 
+    // ==========================================
+    // INTERFAZ PRINCIPAL
+    // ==========================================
+
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Subir Evidencia") }) }
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text("Enviar evidencia")
+                },
+                navigationIcon = {
+                    IconButton(
+                        onClick = {
+                            navController.popBackStack()
+                        }
+                    ) {
+                        Icon(
+                            Icons.Filled.ArrowBack,
+                            contentDescription = "Volver"
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor =
+                        MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor =
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            )
+        }
     ) { paddingValues ->
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp),
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Vista previa de la imagen cargada
+
+            // ==================================
+            // VISTA PREVIA DE LA FOTOGRAFÍA
+            // ==================================
+
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(260.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                colors = CardDefaults.cardColors(
+                    containerColor =
+                        MaterialTheme.colorScheme.surfaceVariant
+                )
             ) {
+
                 if (evidenciaUri != null) {
+
                     AsyncImage(
                         model = evidenciaUri,
-                        contentDescription = "Vista previa de la evidencia",
+                        contentDescription = "Vista previa de evidencia",
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
+
                 } else {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Ninguna imagen seleccionada", color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Ninguna imagen seleccionada",
+                            color =
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
 
-            // Botones de captura / selección
+            // ==================================
+            // BOTONES CÁMARA Y GALERÍA
+            // ==================================
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                // Botón Galería
+
                 FilledTonalButton(
+                    enabled = !guardando,
                     onClick = {
                         galleryLauncher.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            PickVisualMediaRequest(
+                                ActivityResultContracts
+                                    .PickVisualMedia.ImageOnly
+                            )
                         )
                     }
                 ) {
-                    Icon(Icons.Filled.PhotoLibrary, contentDescription = "Galería")
+                    Icon(
+                        Icons.Filled.PhotoLibrary,
+                        contentDescription = null
+                    )
+
                     Spacer(Modifier.width(8.dp))
+
                     Text("Galería")
                 }
 
-                // Botón Cámara
                 Button(
+                    enabled = !guardando,
                     onClick = {
-                        uriTemporalParaCamara = crearUriDeArchivo(context)
-                        uriTemporalParaCamara?.let { uri ->
-                            cameraLauncher.launch(uri)
+
+                        try {
+                            uriTemporalParaCamara =
+                                crearUriDeArchivo(context)
+
+                            uriTemporalParaCamara?.let { uri ->
+                                cameraLauncher.launch(uri)
+                            }
+
+                        } catch (e: Exception) {
+                            Toast.makeText(
+                                context,
+                                "No se pudo abrir la cámara",
+                                Toast.LENGTH_LONG
+                            ).show()
                         }
                     }
                 ) {
-                    Icon(Icons.Filled.CameraAlt, contentDescription = "Cámara")
+                    Icon(
+                        Icons.Filled.CameraAlt,
+                        contentDescription = null
+                    )
+
                     Spacer(Modifier.width(8.dp))
+
                     Text("Cámara")
                 }
             }
 
-            // Input para el comentario del estudiante
+            // ==================================
+            // COMENTARIO DEL ESTUDIANTE
+            // ==================================
+
             OutlinedTextField(
                 value = comentario,
-                onValueChange = { comentario = it },
-                label = { Text("Comentario de la tarea (opcional)") },
+                onValueChange = {
+                    comentario = it
+                },
+                label = {
+                    Text("Comentario de la tarea (opcional)")
+                },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = false,
-                maxLines = 3
+                enabled = !guardando,
+                minLines = 3,
+                maxLines = 5
             )
 
-            Spacer(Modifier.weight(1f))
+            Text(
+                text = "Tu fotografía será enviada al administrador para su revisión.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
-            // Botón para guardar en la base de datos Room a través del Repositorio
+            // ==================================
+            // BOTÓN ENVIAR EVIDENCIA
+            // ==================================
+
             Button(
-                enabled = evidenciaUri != null,
+                enabled = evidenciaUri != null &&
+                        !guardando &&
+                        !accessToken.isNullOrBlank(),
                 onClick = {
+
                     evidenciaUri?.let { uri ->
+
+                        guardando = true
+
                         viewModel.guardarEvidenciaPorId(
                             tareaId = tareaId,
                             comentario = comentario,
-                            rutaFoto = uri.toString()
+                            rutaFoto = uri.toString(),
+                            accessToken = accessToken,
+
+                            onSuccess = {
+                                guardando = false
+
+                                Toast.makeText(
+                                    context,
+                                    "Evidencia enviada para validación",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+
+                                navController.popBackStack()
+                            },
+
+                            onError = {
+                                guardando = false
+
+                                Toast.makeText(
+                                    context,
+                                    "No se pudo enviar la evidencia",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
                         )
-                        Toast.makeText(context, "Evidencia guardada con éxito", Toast.LENGTH_SHORT).show()
-                        navController.popBackStack()
                     }
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
             ) {
-                Text("Guardar Evidencia y Finalizar Tarea")
+
+                if (guardando) {
+
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+
+                    Spacer(Modifier.width(10.dp))
+
+                    Text("Enviando...")
+
+                } else {
+
+                    Text("Enviar evidencia para validación")
+                }
+            }
+
+            if (accessToken.isNullOrBlank()) {
+                Text(
+                    text = "Debes iniciar sesión para enviar evidencia.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
         }
     }
 }
 
-// Función auxiliar para generar un archivo temporal seguro para la cámara
+// ==========================================
+// CREAR URI PARA LA CÁMARA
+// ==========================================
+
 fun crearUriDeArchivo(context: Context): Uri {
-    val nombreArchivo = "evidencia_${System.currentTimeMillis()}.jpg"
-    val archivo = File(context.filesDir, nombreArchivo)
+
+    val nombreArchivo =
+        "evidencia_${System.currentTimeMillis()}.jpg"
+
+    val archivo = File(
+        context.filesDir,
+        nombreArchivo
+    )
 
     return FileProvider.getUriForFile(
         context,
@@ -173,14 +366,34 @@ fun crearUriDeArchivo(context: Context): Uri {
     )
 }
 
-// Copia una imagen elegida en la galería al almacenamiento interno de la app
-fun copiarImagenAAlmacenamientoInterno(context: Context, uri: Uri): Uri? {
+// ==========================================
+// COPIAR FOTO DESDE LA GALERÍA
+// ==========================================
+
+fun copiarImagenAAlmacenamientoInterno(
+    context: Context,
+    uri: Uri
+): Uri? {
+
     return try {
-        val destino = File(context.filesDir, "evidencia_${System.currentTimeMillis()}.jpg")
-        context.contentResolver.openInputStream(uri)?.use { entrada ->
-            destino.outputStream().use { salida -> entrada.copyTo(salida) }
-        } ?: return null
+
+        val destino = File(
+            context.filesDir,
+            "evidencia_${System.currentTimeMillis()}.jpg"
+        )
+
+        context.contentResolver
+            .openInputStream(uri)
+            ?.use { entrada ->
+
+                destino.outputStream().use { salida ->
+                    entrada.copyTo(salida)
+                }
+
+            } ?: return null
+
         Uri.fromFile(destino)
+
     } catch (e: Exception) {
         null
     }

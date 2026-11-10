@@ -5,7 +5,7 @@ spring:
 
   datasource:
     url: jdbc:mariadb://localhost:3306/huerta_cultivos
-    username: root
+    username: huerta_app
     password: ${DB_PASSWORD}
     driver-class-name: org.mariadb.jdbc.Driver
 

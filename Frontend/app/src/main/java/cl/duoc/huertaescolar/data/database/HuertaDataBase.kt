@@ -1,9 +1,11 @@
+
 package cl.duoc.huertaescolar.data.database
 
 import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import cl.duoc.huertaescolar.data.local.dao.*
 import cl.duoc.huertaescolar.data.local.entity.*
@@ -19,7 +21,7 @@ import kotlinx.coroutines.launch
         Tarea::class,
         Alerta::class
     ],
-    version = 6, // 🚀 Subimos a 6 para forzar la migración limpia con la contraseña
+    version = 7,
     exportSchema = false
 )
 abstract class HuertaDatabase : RoomDatabase() {
@@ -31,23 +33,38 @@ abstract class HuertaDatabase : RoomDatabase() {
     abstract fun alertaDao(): AlertaDao
 
     companion object {
+
         @Volatile
         private var INSTANCE: HuertaDatabase? = null
 
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    ALTER TABLE usuarios
+                    ADD COLUMN backendId INTEGER
+                    """.trimIndent()
+                )
+            }
+        }
+
         fun obtenerBaseDatos(context: Context): HuertaDatabase {
             return INSTANCE ?: synchronized(this) {
+
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     HuertaDatabase::class.java,
                     "huerta_escolar_db"
                 )
-                    .fallbackToDestructiveMigration() // Borra y recrea la BD al cambiar de versión
+                    .addMigrations(MIGRATION_6_7)
                     .addCallback(object : RoomDatabase.Callback() {
+
                         override fun onCreate(db: SupportSQLiteDatabase) {
                             super.onCreate(db)
+
                             INSTANCE?.let { database ->
                                 CoroutineScope(Dispatchers.IO).launch {
-                                    // Usuarios
+
                                     database.usuarioDao().insertarUsuario(
                                         Usuario(
                                             identificador = "admin1",
@@ -58,6 +75,7 @@ abstract class HuertaDatabase : RoomDatabase() {
                                             contrasena = "admin123"
                                         )
                                     )
+
                                     database.usuarioDao().insertarUsuario(
                                         Usuario(
                                             identificador = "estudiante1",
@@ -68,7 +86,7 @@ abstract class HuertaDatabase : RoomDatabase() {
                                             contrasena = "alumno123"
                                         )
                                     )
-                                    // Sector Semilla (Para que no esté vacío)
+
                                     database.sectorDao().insertarSector(
                                         Sector(
                                             id = 1,
@@ -82,7 +100,6 @@ abstract class HuertaDatabase : RoomDatabase() {
                                         )
                                     )
 
-                                    // Tarea Semilla (Para probar la lista de inmediato)
                                     database.tareaDao().insertarTarea(
                                         Tarea(
                                             id = 1,
@@ -100,6 +117,7 @@ abstract class HuertaDatabase : RoomDatabase() {
                         }
                     })
                     .build()
+
                 INSTANCE = instance
                 instance
             }

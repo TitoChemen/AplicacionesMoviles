@@ -1,6 +1,11 @@
+
 package cl.duoc.huertaescolar.ui.theme.screens
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
+import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -10,172 +15,458 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import cl.duoc.huertaescolar.data.EstadoTarea
+import cl.duoc.huertaescolar.data.remote.RetrofitClient
 import cl.duoc.huertaescolar.viewmodel.TareaViewModel
-import coil.compose.AsyncImage
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ValidacionTareaScreen(
     navController: NavController,
     viewModel: TareaViewModel,
-    tareaId: Int
+    tareaId: Int,
+    accessToken: String?
 ) {
-    // Leemos las tareas usando tareasFiltradas para evitar la referencia nula
-    val tareas by viewModel.tareasFiltradas.collectAsState()
+    val context = LocalContext.current
+
+    val tareas by viewModel.tareasSinFiltrar.collectAsState()
     val tarea = tareas.find { it.id == tareaId }
+
+    var procesando by remember {
+        mutableStateOf(false)
+    }
+
+    var imagenEvidencia by remember {
+        mutableStateOf<Bitmap?>(null)
+    }
+
+    var errorImagen by remember {
+        mutableStateOf<String?>(null)
+    }
+
+    var cargandoImagen by remember {
+        mutableStateOf(false)
+    }
+
+    val puedeEvaluarse =
+        tarea?.estado == EstadoTarea.PENDIENTE_VALIDACION ||
+                tarea?.estado == "REALIZADA"
+
+    // ==========================================
+    // DESCARGAR FOTOGRAFÍA DESDE SPRING BOOT
+    // ==========================================
+
+    LaunchedEffect(
+        tareaId,
+        tarea?.rutaFotografia,
+        accessToken
+    ) {
+        imagenEvidencia = null
+        errorImagen = null
+        cargandoImagen = false
+
+        val ruta = tarea?.rutaFotografia
+
+        if (ruta.isNullOrBlank()) {
+            return@LaunchedEffect
+        }
+
+        if (accessToken.isNullOrBlank()) {
+            errorImagen = "No hay sesión activa."
+            return@LaunchedEffect
+        }
+
+        val nombre = Uri.parse(ruta)
+            .getQueryParameter("nombre")
+
+        if (nombre.isNullOrBlank()) {
+            errorImagen = "La evidencia no tiene un nombre válido."
+            return@LaunchedEffect
+        }
+
+        cargandoImagen = true
+
+        try {
+            val respuesta = withContext(Dispatchers.IO) {
+                RetrofitClient.tareaApi.descargarEvidencia(
+                    token = "Bearer $accessToken",
+                    tareaId = tareaId.toLong(),
+                    nombre = nombre
+                )
+            }
+
+            if (respuesta.isSuccessful) {
+                val bitmap = withContext(Dispatchers.IO) {
+                    respuesta.body()?.use { cuerpo ->
+                        BitmapFactory.decodeStream(
+                            cuerpo.byteStream()
+                        )
+                    }
+                }
+
+                if (bitmap != null) {
+                    imagenEvidencia = bitmap
+                } else {
+                    errorImagen = "No se pudo leer la fotografía."
+                }
+            } else {
+                errorImagen =
+                    "Error HTTP ${respuesta.code()} al descargar."
+            }
+
+        } catch (e: CancellationException) {
+            throw e
+
+        } catch (e: Exception) {
+            errorImagen =
+                e.message ?: "Error al descargar la fotografía."
+
+        } finally {
+            cargandoImagen = false
+        }
+    }
+
+    // ==========================================
+    // PANTALLA
+    // ==========================================
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Validar Evidencia de Tarea") },
+                title = {
+                    Text("Validar Evidencia de Tarea")
+                },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Volver")
+                    IconButton(
+                        onClick = {
+                            navController.popBackStack()
+                        },
+                        enabled = !procesando
+                    ) {
+                        Icon(
+                            Icons.Filled.ArrowBack,
+                            contentDescription = "Volver"
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    containerColor =
+                        MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor =
+                        MaterialTheme.colorScheme.onPrimaryContainer
                 )
             )
         }
     ) { paddingValues ->
+
         if (tarea == null) {
-            Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-            return@Scaffold
-        }
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // 1. INFORMACIÓN GENERAL DE LA TAREA
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Tipo: ${tarea.tipo}",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = tarea.descripcion,
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Asignado a: ${tarea.asignadoA}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline
-                    )
-                }
+                Text("No se encontró la tarea solicitada.")
             }
 
-            // 2. SECCIÓN DE EVIDENCIA ENVIADA POR EL ESTUDIANTE
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        } else {
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Evidencia del Estudiante",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.secondary,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
 
-                    Text(
-                        text = "Comentario del alumno:",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = if (!tarea.comentarioEstudiante.isNullOrBlank()) tarea.comentarioEstudiante else "Sin comentarios del alumno.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                // ==================================
+                // INFORMACIÓN DE LA TAREA
+                // ==================================
 
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = "Fotografía Adjunta:",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    if (!tarea.rutaFotografia.isNullOrBlank()) {
-                        AsyncImage(
-                            model = Uri.parse(tarea.rutaFotografia),
-                            contentDescription = "Evidencia fotográfica",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(220.dp),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement =
+                            Arrangement.spacedBy(8.dp)
+                    ) {
                         Text(
-                            text = "No se adjuntó ninguna imagen en esta entrega.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error
+                            text = "Tipo: ${tarea.tipo}",
+                            style =
+                                MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Text(
+                            text = tarea.descripcion
+                        )
+
+                        Text(
+                            text = "Asignado a: ${tarea.asignadoA}",
+                            style =
+                                MaterialTheme.typography.bodySmall
+                        )
+
+                        Text(
+                            text = "Estado: ${
+                                EstadoTarea.etiqueta(tarea.estado)
+                            }",
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
-            }
 
-            // 3. CAMPO DE RETROALIMENTACIÓN DEL DOCENTE
-            OutlinedTextField(
-                value = viewModel.comentarioValidacion,
-                onValueChange = { viewModel.comentarioValidacion = it },
-                label = { Text("Comentario de retroalimentación (Opcional)") },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 3
-            )
+                // ==================================
+                // EVIDENCIA DEL ESTUDIANTE
+                // ==================================
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // 4. BOTONES DE ACCIÓN (Aprobar / Rechazar)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Button(
-                    onClick = {
-                        viewModel.evaluarTarea(tareaId, aprobada = false) {
-                            navController.popBackStack()
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                    modifier = Modifier.weight(1f)
+                Card(
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Rechazar")
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement =
+                            Arrangement.spacedBy(12.dp)
+                    ) {
+
+                        Text(
+                            text = "Evidencia del estudiante",
+                            style =
+                                MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Text(
+                            text = "Comentario del estudiante:",
+                            fontWeight = FontWeight.SemiBold
+                        )
+
+                        Text(
+                            text = tarea.comentarioEstudiante
+                                ?.takeIf { it.isNotBlank() }
+                                ?: "Sin comentarios."
+                        )
+
+                        Divider()
+
+                        Text(
+                            text = "Fotografía adjunta:",
+                            fontWeight = FontWeight.SemiBold
+                        )
+
+                        // MOSTRAR FOTOGRAFÍA
+                        when {
+                            imagenEvidencia != null -> {
+                                Image(
+                                    bitmap =
+                                        imagenEvidencia!!.asImageBitmap(),
+                                    contentDescription =
+                                        "Evidencia fotográfica",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(240.dp),
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
+
+                            errorImagen != null -> {
+                                Text(
+                                    text = errorImagen!!,
+                                    color =
+                                        MaterialTheme.colorScheme.error
+                                )
+                            }
+
+                            cargandoImagen -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(180.dp),
+                                    contentAlignment =
+                                        Alignment.Center
+                                ) {
+                                    CircularProgressIndicator()
+                                }
+                            }
+
+                            tarea.rutaFotografia.isNullOrBlank() -> {
+                                Text(
+                                    "No se adjuntó fotografía."
+                                )
+                            }
+
+                            else -> {
+                                Text(
+                                    "Esperando fotografía..."
+                                )
+                            }
+                        }
+                    }
                 }
 
-                Button(
-                    onClick = {
-                        viewModel.evaluarTarea(tareaId, aprobada = true) {
-                            navController.popBackStack()
+                // ==================================
+                // VALIDACIÓN DEL ADMINISTRADOR
+                // ==================================
+
+                if (puedeEvaluarse) {
+
+                    OutlinedTextField(
+                        value = viewModel.comentarioValidacion,
+                        onValueChange = {
+                            viewModel.comentarioValidacion = it
+                        },
+                        label = {
+                            Text(
+                                "Retroalimentación del administrador"
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !procesando,
+                        minLines = 3
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement =
+                            Arrangement.spacedBy(12.dp)
+                    ) {
+
+                        // RECHAZAR
+                        Button(
+                            onClick = {
+                                procesando = true
+
+                                viewModel.evaluarTarea(
+                                    tareaId = tareaId,
+                                    aprobada = false,
+                                    accessToken = accessToken,
+                                    onSuccess = {
+                                        procesando = false
+
+                                        Toast.makeText(
+                                            context,
+                                            "Evidencia rechazada correctamente",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+
+                                        navController.popBackStack()
+                                    },
+                                    onError = {
+                                        procesando = false
+
+                                        Toast.makeText(
+                                            context,
+                                            "No se pudo rechazar la evidencia",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                )
+                            },
+                            modifier = Modifier.weight(1f),
+                            enabled = !procesando &&
+                                    !accessToken.isNullOrBlank(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor =
+                                    MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Text("Rechazar")
                         }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Aprobar")
+
+                        // APROBAR
+                        Button(
+                            onClick = {
+                                procesando = true
+
+                                viewModel.evaluarTarea(
+                                    tareaId = tareaId,
+                                    aprobada = true,
+                                    accessToken = accessToken,
+                                    onSuccess = {
+                                        procesando = false
+
+                                        Toast.makeText(
+                                            context,
+                                            "Evidencia aprobada correctamente",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+
+                                        navController.popBackStack()
+                                    },
+                                    onError = {
+                                        procesando = false
+
+                                        Toast.makeText(
+                                            context,
+                                            "No se pudo aprobar la evidencia",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                )
+                            },
+                            modifier = Modifier.weight(1f),
+                            enabled = !procesando &&
+                                    !accessToken.isNullOrBlank()
+                        ) {
+                            Text("Aprobar")
+                        }
+                    }
+
+                    if (procesando) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement =
+                                Arrangement.Center,
+                            verticalAlignment =
+                                Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                strokeWidth = 2.dp
+                            )
+
+                            Spacer(Modifier.width(12.dp))
+
+                            Text("Procesando validación...")
+                        }
+                    }
+
+                    if (accessToken.isNullOrBlank()) {
+                        Text(
+                            text =
+                                "No hay una sesión activa para validar.",
+                            color =
+                                MaterialTheme.colorScheme.error
+                        )
+                    }
+
+                } else {
+
+                    Text(
+                        text =
+                            "Esta tarea no está pendiente de validación.",
+                        color =
+                            MaterialTheme.colorScheme.secondary
+                    )
+
+                    if (!tarea.comentarioDocente.isNullOrBlank()) {
+                        Text(
+                            text =
+                                "Retroalimentación: ${tarea.comentarioDocente}"
+                        )
+                    }
                 }
             }
         }

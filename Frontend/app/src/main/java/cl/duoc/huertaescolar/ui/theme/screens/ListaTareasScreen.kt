@@ -39,9 +39,6 @@ fun ListaTareasScreen(
     val filtroActual by viewModel.filtroSeleccionado.collectAsState()
     val esAdmin = usuarioActivo?.perfil == Perfil.ADMINISTRADOR
 
-    LaunchedEffect(usuarioActivo) {
-        viewModel.cargarTareasSegunRol(usuarioActivo)
-    }
 
     Scaffold(
         topBar = {
@@ -131,11 +128,16 @@ fun ListaTareasScreen(
                             onDelete = { viewModel.eliminarTarea(tarea) }
                         ) {
                             if (esAdmin) {
-                                if (tarea.estado == EstadoTarea.PENDIENTE_VALIDACION || tarea.estado == EstadoTarea.VALIDADA) {
+                                if (
+                                    tarea.estado == EstadoTarea.PENDIENTE_VALIDACION ||
+                                    tarea.estado == EstadoTarea.VALIDADA ||
+                                    tarea.estado == "REALIZADA"
+                                ) {
                                     navController.navigate("validacion_tarea/${tarea.id}")
                                 }
                             } else {
-                                if (tarea.estado == EstadoTarea.PENDIENTE ||
+                                if (
+                                    tarea.estado == EstadoTarea.PENDIENTE ||
                                     tarea.estado == EstadoTarea.RECHAZADA
                                 ) {
                                     navController.navigate("detalle_tarea/${tarea.id}")
@@ -226,49 +228,59 @@ fun TareaCard(
                         Spacer(modifier = Modifier.height(4.dp))
                     }
 
+
+                    Text(
+                        text = tarea.tipo,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color(0xFF1B5E20),
+                        fontWeight = FontWeight.Bold
+                    )
+
                     Text(
                         text = tarea.descripcion,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color(0xFF1B5E20) // Texto verde oscuro natural
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color(0xFF558B2F)
                     )
+
                     Text(
                         text = "Vence: ${tarea.fechaProgramada}",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFF558B2F)
                     )
-                }
 
-                // Etiqueta semántica de estado
-                Surface(
-                    color = colorEstado.copy(alpha = 0.15f),
-                    shape = MaterialTheme.shapes.small,
-                    modifier = Modifier.padding(horizontal = 4.dp)
-                ) {
-                    Text(
-                        text = EstadoTarea.etiqueta(tarea.estado),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colorEstado,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
 
-                if (esAdmin) {
-                    Row {
-                        IconButton(onClick = onEdit) {
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = "Editar tarea",
-                                tint = Color(0xFF2E7D32)
-                            )
-                        }
+                    // Etiqueta semántica de estado
+                    Surface(
+                        color = colorEstado.copy(alpha = 0.15f),
+                        shape = MaterialTheme.shapes.small,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    ) {
+                        Text(
+                            text = EstadoTarea.etiqueta(tarea.estado),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colorEstado,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
 
-                        IconButton(onClick = onDelete) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Eliminar tarea",
-                                tint = Color(0xFFC62828)
-                            )
+                    if (esAdmin) {
+                        Row {
+                            IconButton(onClick = onEdit) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Editar tarea",
+                                    tint = Color(0xFF2E7D32)
+                                )
+                            }
+
+                            IconButton(onClick = onDelete) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Eliminar tarea",
+                                    tint = Color(0xFFC62828)
+                                )
+                            }
                         }
                     }
                 }
@@ -281,10 +293,10 @@ fun TareaCard(
 @Composable
 fun obtenerColorPorEstado(estado: String): Color {
     return when (estado) {
-        EstadoTarea.PENDIENTE -> Color(0xFFEF6C00) // Naranja cálido (Cosecha/Pendiente)
-        EstadoTarea.PENDIENTE_VALIDACION -> Color(0xFF6A1B9A) // Púrpura suave (En revisión)
-        EstadoTarea.VALIDADA -> Color(0xFF2E7D32) // Verde bosque (Éxito / Crecimiento)
-        EstadoTarea.RECHAZADA -> Color(0xFFC62828) // Rojo natural (Alerta / Requiere ajuste)
+        EstadoTarea.PENDIENTE -> Color(0xFFEF6C00)
+        EstadoTarea.PENDIENTE_VALIDACION -> Color(0xFF6A1B9A)
+        EstadoTarea.VALIDADA -> Color(0xFF2E7D32)
+        EstadoTarea.RECHAZADA -> Color(0xFFC62828)
         else -> Color(0xFF78909C)
     }
 }

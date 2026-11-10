@@ -1,9 +1,11 @@
+
 package cl.duoc.huertaescolar
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -14,6 +16,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+
 import cl.duoc.huertaescolar.ui.theme.screens.*
 import cl.duoc.huertaescolar.viewmodel.AuthViewModel
 import cl.duoc.huertaescolar.viewmodel.SectorViewModel
@@ -21,125 +24,271 @@ import cl.duoc.huertaescolar.viewmodel.TareaViewModel
 
 @Composable
 fun HuertaAppNavigation() {
+
     val navController = rememberNavController()
 
-    // ViewModels compartidos entre pantallas
+    // =====================================
+    // VIEWMODELS COMPARTIDOS
+    // =====================================
+
     val authViewModel: AuthViewModel = viewModel()
     val sectorViewModel: SectorViewModel = viewModel()
     val tareaViewModel: TareaViewModel = viewModel()
 
     val usuario by authViewModel.usuarioActivo.collectAsState()
     val loginError by authViewModel.loginError.collectAsState()
+    val accessToken by authViewModel.accessToken.collectAsState()
 
-    NavHost(navController = navController, startDestination = "login") {
+    // =====================================
+    // CARGAR TAREAS SEGÚN EL USUARIO
+    // =====================================
 
-        // --- Login ---
+    LaunchedEffect(usuario, accessToken) {
+        tareaViewModel.cargarTareasSegunRol(
+            usuarioActivo = usuario,
+            accessToken = accessToken
+        )
+    }
+
+    // =====================================
+    // CONFIGURAR SESIÓN DE SECTORES
+    // =====================================
+
+    LaunchedEffect(accessToken) {
+        sectorViewModel.configurarSesion(accessToken)
+    }
+
+    // =====================================
+    // NAVEGACIÓN PRINCIPAL
+    // =====================================
+
+    NavHost(
+        navController = navController,
+        startDestination = "login"
+    ) {
+
+        // =====================================
+        // LOGIN
+        // =====================================
+
         composable("login") {
+
             LoginScreen(
                 error = loginError,
-                onLogin = { identificadorIngresado, contrasenaIngresada ->
-                    authViewModel.login(identificadorIngresado, contrasenaIngresada) {
-                        val usuarioActual = authViewModel.usuarioActivo.value
-                        if (usuarioActual?.perfil == "ADMINISTRADOR") {
+
+                onLogin = {
+                        identificadorIngresado,
+                        contrasenaIngresada ->
+
+                    authViewModel.login(
+                        identificadorIngresado,
+                        contrasenaIngresada
+                    ) {
+
+                        val usuarioActual =
+                            authViewModel.usuarioActivo.value
+
+                        if (
+                            usuarioActual?.perfil ==
+                            "ADMINISTRADOR"
+                        ) {
                             navController.navigate("menu_admin") {
-                                popUpTo("login") { inclusive = true }
+                                popUpTo("login") {
+                                    inclusive = true
+                                }
                             }
                         } else {
                             navController.navigate("menu_estudiante") {
-                                popUpTo("login") { inclusive = true }
+                                popUpTo("login") {
+                                    inclusive = true
+                                }
                             }
                         }
                     }
                 },
+
                 onEditar = {
                     authViewModel.clearError()
                 }
             )
         }
 
-        // --- Menú Administrador ---
+        // =====================================
+        // MENÚ ADMINISTRADOR
+        // =====================================
+
         composable("menu_admin") {
+
             DashboardScreen(
                 usuario = usuario,
                 navController = navController,
+
                 onLogout = {
                     authViewModel.logout()
+
                     navController.navigate("login") {
-                        popUpTo("menu_admin") { inclusive = true }
+                        popUpTo("menu_admin") {
+                            inclusive = true
+                        }
                     }
                 }
             )
         }
 
-        // --- Menú Estudiante ---
+        // =====================================
+        // MENÚ ESTUDIANTE
+        // =====================================
+
         composable("menu_estudiante") {
+
             DashboardScreen(
                 usuario = usuario,
                 navController = navController,
+
                 onLogout = {
                     authViewModel.logout()
+
                     navController.navigate("login") {
-                        popUpTo("menu_estudiante") { inclusive = true }
+                        popUpTo("menu_estudiante") {
+                            inclusive = true
+                        }
                     }
                 }
             )
         }
 
-        // --- Dashboard genérico ---
+        // =====================================
+        // DASHBOARD GENÉRICO
+        // =====================================
+
         composable("dashboard") {
+
             DashboardScreen(
                 usuario = usuario,
                 navController = navController,
+
                 onLogout = {
                     authViewModel.logout()
+
                     navController.navigate("login") {
-                        popUpTo("dashboard") { inclusive = true }
+                        popUpTo("dashboard") {
+                            inclusive = true
+                        }
                     }
                 }
             )
         }
 
-        // --- Sectores y cultivos ---
+        // =====================================
+        // LISTA DE SECTORES
+        // =====================================
+
         composable("lista_sectores") {
+
+            LaunchedEffect(accessToken) {
+                if (!accessToken.isNullOrBlank()) {
+                    sectorViewModel.cargarDatos()
+                }
+            }
+
             SectorScreen(
                 viewModel = sectorViewModel,
-                onNavigateToCamera = { navController.navigate("evidencia/1") },
-                onBackClick = { navController.popBackStack() },
-                idResponsable = usuario?.identificador ?: "admin1",
-                onSectorClick = { id -> navController.navigate("detalle_sector/$id") }
+
+                onNavigateToCamera = {
+                    navController.navigate("evidencia/1")
+                },
+
+                onBackClick = {
+                    navController.popBackStack()
+                },
+
+                idResponsable =
+                    usuario?.identificador ?: "admin1",
+
+                onSectorClick = { id ->
+                    navController.navigate(
+                        "detalle_sector/$id"
+                    )
+                }
             )
         }
+
+        // =====================================
+        // CREAR SECTOR
+        // =====================================
+
         composable("crear_sector") {
+
             CrearSectorScreen(
                 navController = navController,
                 viewModel = sectorViewModel,
-                idAdministradorActivo = usuario?.identificador ?: "admin1"
-            )
-        }
-        composable(
-            route = "detalle_sector/{sectorId}",
-            arguments = listOf(navArgument("sectorId") { type = NavType.IntType })
-        ) { entry ->
-            DetalleSectorScreen(
-                navController = navController,
-                viewModel = sectorViewModel,
-                sectorId = entry.arguments?.getInt("sectorId") ?: 0
-            )
-        }
-        composable(
-            route = "crear_cultivo/{sectorId}",
-            arguments = listOf(navArgument("sectorId") { type = NavType.IntType })
-        ) { entry ->
-            CrearCultivoScreen(
-                navController = navController,
-                viewModel = sectorViewModel,
-                sectorId = entry.arguments?.getInt("sectorId") ?: 0
+
+                idAdministradorActivo =
+                    usuario?.identificador ?: "admin1"
             )
         }
 
-        // --- Tareas ---
-        listOf("lista_tareas", "mis_tareas", "historial_actividades", "revision_tareas").forEach { ruta ->
+        // =====================================
+        // DETALLE DE SECTOR
+        // =====================================
+
+        composable(
+            route = "detalle_sector/{sectorId}",
+
+            arguments = listOf(
+                navArgument("sectorId") {
+                    type = NavType.IntType
+                }
+            )
+        ) { entry ->
+
+            val sectorId =
+                entry.arguments?.getInt("sectorId") ?: 0
+
+            DetalleSectorScreen(
+                navController = navController,
+                viewModel = sectorViewModel,
+                sectorId = sectorId
+            )
+        }
+
+        // =====================================
+        // CREAR CULTIVO
+        // =====================================
+
+        composable(
+            route = "crear_cultivo/{sectorId}",
+
+            arguments = listOf(
+                navArgument("sectorId") {
+                    type = NavType.IntType
+                }
+            )
+        ) { entry ->
+
+            val sectorId =
+                entry.arguments?.getInt("sectorId") ?: 0
+
+            CrearCultivoScreen(
+                navController = navController,
+                viewModel = sectorViewModel,
+                sectorId = sectorId
+            )
+        }
+
+        // =====================================
+        // LISTAS DE TAREAS
+        // =====================================
+
+        listOf(
+            "lista_tareas",
+            "mis_tareas",
+            "historial_actividades",
+            "revision_tareas"
+        ).forEach { ruta ->
+
             composable(ruta) {
+
                 ListaTareasScreen(
                     navController = navController,
                     viewModel = tareaViewModel,
@@ -147,60 +296,141 @@ fun HuertaAppNavigation() {
                 )
             }
         }
-        composable("crear_tarea") {
-            CrearTareaScreen(navController = navController, viewModel = tareaViewModel)
-        }
-        composable(
-            route = "detalle_tarea/{tareaId}",
-            arguments = listOf(navArgument("tareaId") { type = NavType.IntType })
-        ) { entry ->
-            DetalleTareaEstudianteScreen(
-                navController = navController,
-                viewModel = tareaViewModel,
-                tareaId = entry.arguments?.getInt("tareaId") ?: 0
-            )
-        }
-        composable(
-            route = "validacion_tarea/{tareaId}",
-            arguments = listOf(navArgument("tareaId") { type = NavType.IntType })
-        ) { entry ->
-            ValidacionTareaScreen(
-                navController = navController,
-                viewModel = tareaViewModel,
-                tareaId = entry.arguments?.getInt("tareaId") ?: 0
-            )
-        }
 
-        // --- Evidencia (cámara / galería) ---
-        composable(
-            route = "evidencia/{tareaId}",
-            arguments = listOf(navArgument("tareaId") { type = NavType.IntType })
-        ) { entry ->
-            val tareaId = entry.arguments?.getInt("tareaId") ?: 0
-            EvidenciaScreen(
-                tareaId = tareaId,
+        // =====================================
+        // CREAR TAREA
+        // =====================================
+
+        composable("crear_tarea") {
+
+            CrearTareaScreen(
                 navController = navController,
                 viewModel = tareaViewModel
             )
         }
 
-        // --- Pantallas aún no implementadas ---
-        composable("crear_reporte") {
-            PantallaEnConstruccion("Reportar Problema") { navController.popBackStack() }
+        // =====================================
+        // DETALLE TAREA ESTUDIANTE
+        // =====================================
+
+        composable(
+            route = "detalle_tarea/{tareaId}",
+
+            arguments = listOf(
+                navArgument("tareaId") {
+                    type = NavType.IntType
+                }
+            )
+        ) { entry ->
+
+            val tareaId =
+                entry.arguments?.getInt("tareaId") ?: 0
+
+            DetalleTareaEstudianteScreen(
+                navController = navController,
+                viewModel = tareaViewModel,
+                tareaId = tareaId
+            )
         }
+
+        // =====================================
+        // VALIDACIÓN DE TAREA
+        // =====================================
+
+        composable(
+            route = "validacion_tarea/{tareaId}",
+
+            arguments = listOf(
+                navArgument("tareaId") {
+                    type = NavType.IntType
+                }
+            )
+        ) { entry ->
+
+            val tareaId =
+                entry.arguments?.getInt("tareaId") ?: 0
+
+            ValidacionTareaScreen(
+                navController = navController,
+                viewModel = tareaViewModel,
+                tareaId = tareaId,
+                accessToken = accessToken
+            )
+        }
+
+        // =====================================
+        // EVIDENCIAS
+        // =====================================
+
+        composable(
+            route = "evidencia/{tareaId}",
+
+            arguments = listOf(
+                navArgument("tareaId") {
+                    type = NavType.IntType
+                }
+            )
+        ) { entry ->
+
+            val tareaId =
+                entry.arguments?.getInt("tareaId") ?: 0
+
+            EvidenciaScreen(
+                tareaId = tareaId,
+                navController = navController,
+                viewModel = tareaViewModel,
+                accessToken = accessToken
+            )
+        }
+
+        // =====================================
+        // REPORTES PENDIENTES
+        // =====================================
+
+        composable("crear_reporte") {
+
+            PantallaEnConstruccion(
+                "Reportar Problema"
+            ) {
+                navController.popBackStack()
+            }
+        }
+
         composable("lista_reportes") {
-            PantallaEnConstruccion("Reportes Huerto") { navController.popBackStack() }
+
+            PantallaEnConstruccion(
+                "Reportes Huerto"
+            ) {
+                navController.popBackStack()
+            }
         }
     }
 }
 
-// Pantalla temporal para funciones pendientes
+// =====================================
+// PANTALLA TEMPORAL
+// =====================================
+
 @Composable
-fun PantallaEnConstruccion(titulo: String, onVolver: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+fun PantallaEnConstruccion(
+    titulo: String,
+    onVolver: () -> Unit
+) {
+
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+
             Text("$titulo: en construcción")
-            Button(onClick = onVolver) { Text("Volver") }
+
+            Button(onClick = onVolver) {
+                Text("Volver")
+            }
         }
     }
 }

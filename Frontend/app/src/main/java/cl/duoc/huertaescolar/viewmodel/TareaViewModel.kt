@@ -1,3 +1,4 @@
+
 package cl.duoc.huertaescolar.viewmodel
 
 import android.app.Application
@@ -23,12 +24,33 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+import android.util.Log
+import cl.duoc.huertaescolar.data.remote.RetrofitClient
+import cl.duoc.huertaescolar.data.remote.aTareaLocal
+import retrofit2.HttpException
+import java.io.IOException
+
+import android.net.Uri
+import android.webkit.MimeTypeMap
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import java.io.File
+import kotlinx.coroutines.CancellationException
+
+import cl.duoc.huertaescolar.data.remote.ValidacionRequestDto
+
 class TareaViewModel(application: Application) : AndroidViewModel(application) {
+
+    // =========================================================
+    // REPOSITORIO Y BASE DE DATOS
+    // =========================================================
 
     private val repository: HuertaRepository
 
     init {
         val database = HuertaDatabase.obtenerBaseDatos(application)
+
         repository = HuertaRepository(
             sectorDao = database.sectorDao(),
             cultivoDao = database.cultivoDao(),
@@ -38,170 +60,500 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    // 1. Filtro seleccionado (por defecto, TODAS)
-    private val _filtroSeleccionado = MutableStateFlow(EstadoTarea.TODAS)
-    val filtroSeleccionado: StateFlow<String> = _filtroSeleccionado.asStateFlow()
+    // =========================================================
+    // FILTROS Y LISTADO DE TAREAS
+    // =========================================================
 
-    // 2. Lista base (sin filtrar) según el rol del usuario activo
-    private val _tareasBase = MutableStateFlow<List<Tarea>>(emptyList())
+    private val _filtroSeleccionado =
+        MutableStateFlow(EstadoTarea.TODAS)
 
-    // 3. Lista filtrada: la lista de tareas en la UI observa este flujo
+    val filtroSeleccionado: StateFlow<String> =
+        _filtroSeleccionado.asStateFlow()
+
+    // Lista original sin filtros
+    private val _tareasBase =
+        MutableStateFlow<List<Tarea>>(emptyList())
+
+    // Lista pública para consultar una tarea por ID
+    // independientemente del filtro seleccionado
+    val tareasSinFiltrar: StateFlow<List<Tarea>> =
+        _tareasBase.asStateFlow()
+
+    // Lista utilizada por ListaTareasScreen
     val tareasFiltradas: StateFlow<List<Tarea>> =
-        combine(_tareasBase, _filtroSeleccionado) { lista, filtro ->
-            if (filtro == EstadoTarea.TODAS) lista else lista.filter { it.estado == filtro }
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        combine(
+            _tareasBase,
+            _filtroSeleccionado
+        ) { lista, filtro ->
+
+            when (filtro) {
+
+                EstadoTarea.TODAS -> lista
+
+                EstadoTarea.PENDIENTE_VALIDACION -> {
+                    lista.filter { tarea ->
+                        tarea.estado == EstadoTarea.PENDIENTE_VALIDACION ||
+                                tarea.estado == "REALIZADA"
+                    }
+                }
+
+                else -> {
+                    lista.filter { tarea ->
+                        tarea.estado == filtro
+                    }
+                }
+            }
+
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 
     fun actualizarFiltro(nuevoFiltro: String) {
         _filtroSeleccionado.value = nuevoFiltro
     }
 
-    // 4. Carga tareas segun rol (Admin: todas; Estudiante: sus tareas)
+    // =========================================================
+    // CARGAR TAREAS SEGÚN EL ROL
+    // =========================================================
+
     private var jobTareas: Job? = null
 
-    fun cargarTareasSegunRol(usuarioActivo: Usuario?) {
+
+    fun cargarTareasSegunRol(
+        usuarioActivo: Usuario?,
+        accessToken: String?
+    ) {
         jobTareas?.cancel()
 
-        if (usuarioActivo == null) {
+        if (usuarioActivo == null || accessToken.isNullOrBlank()) {
             _tareasBase.value = emptyList()
             return
         }
 
-        val flujo = if (usuarioActivo.perfil == Perfil.ADMINISTRADOR) {
-            repository.obtenerTodasLasTareasFlow()
-        } else {
-            repository.obtenerTareasDelEstudiante(usuarioActivo.identificador)
-        }
-
         jobTareas = viewModelScope.launch {
-            flujo.collect { lista -> _tareasBase.value = lista }
-        }
-    }
+            try {
+                val token = "Bearer $accessToken"
 
-    // --- Campos del formulario Crear / Editar Tarea ---
-    var descripcionTarea by mutableStateOf("")
-    var tipoTarea by mutableStateOf("")
-    var fechaProgramada by mutableStateOf("")
-    var responsableIdSeleccionado by mutableStateOf<String?>(null)
+                val tareasRemotas =
+                    if (usuarioActivo.perfil == Perfil.ADMINISTRADOR) {
+                        RetrofitClient.tareaApi.listar(token)
+                    } else {
+                        val estudianteId = usuarioActivo.backendId
 
-    // Estados de error para validaciones
-    var errorDescripcionTarea by mutableStateOf<String?>(null)
-    var errorTipoTarea by mutableStateOf<String?>(null)
-    var errorFechaTarea by mutableStateOf<String?>(null)
-    var errorResponsable by mutableStateOf<String?>(null)
+                        if (estudianteId == null) {
+                            Log.e(
+                                "TareaViewModel",
+                                "El usuario no tiene backendId"
+                            )
+                            _tareasBase.value = emptyList()
+                            return@launch
+                        }
 
-    // Lista de estudiantes para el desplegable de asignación
-    private val _estudiantesDisponibles = MutableStateFlow<List<Usuario>>(emptyList())
-    val estudiantesDisponibles: StateFlow<List<Usuario>> = _estudiantesDisponibles.asStateFlow()
+                        RetrofitClient.tareaApi.porEstudiante(
+                            token = token,
+                            estudianteId = estudianteId
+                        )
+                    }
 
-    fun cargarEstudiantes() {
-        viewModelScope.launch {
-            val todosLosUsuarios = repository.obtenerUsuarios()
-            _estudiantesDisponibles.value = todosLosUsuarios.filter {
-                it.perfil == Perfil.ESTUDIANTE && it.estadoCuenta == "ACTIVA"
+                val tareasConvertidas = tareasRemotas.map {
+                    it.aTareaLocal()
+                }
+
+                _tareasBase.value = tareasConvertidas
+
+                Log.d(
+                    "TareaViewModel",
+                    "Tareas cargadas desde Spring Boot: ${tareasConvertidas.size}"
+                )
+
+            } catch (e: HttpException) {
+                Log.e(
+                    "TareaViewModel",
+                    "Error HTTP ${e.code()} al obtener tareas",
+                    e
+                )
+                _tareasBase.value = emptyList()
+
+            } catch (e: IOException) {
+                Log.e(
+                    "TareaViewModel",
+                    "Error de conexión con Tareas Service",
+                    e
+                )
+                _tareasBase.value = emptyList()
+
+            } catch (e: Exception) {
+                Log.e(
+                    "TareaViewModel",
+                    "Error inesperado al cargar tareas",
+                    e
+                )
+                _tareasBase.value = emptyList()
             }
         }
     }
 
+
+    // =========================================================
+    // FORMULARIO CREAR / EDITAR TAREA
+    // =========================================================
+
+    var descripcionTarea by mutableStateOf("")
+    var tipoTarea by mutableStateOf("")
+    var fechaProgramada by mutableStateOf("")
+
+    var responsableIdSeleccionado by
+    mutableStateOf<String?>(null)
+
+    var errorDescripcionTarea by
+    mutableStateOf<String?>(null)
+
+    var errorTipoTarea by
+    mutableStateOf<String?>(null)
+
+    var errorFechaTarea by
+    mutableStateOf<String?>(null)
+
+    var errorResponsable by
+    mutableStateOf<String?>(null)
+
+    // =========================================================
+    // LISTA DE ESTUDIANTES
+    // =========================================================
+
+    private val _estudiantesDisponibles =
+        MutableStateFlow<List<Usuario>>(emptyList())
+
+    val estudiantesDisponibles: StateFlow<List<Usuario>> =
+        _estudiantesDisponibles.asStateFlow()
+
+    fun cargarEstudiantes() {
+
+        viewModelScope.launch {
+
+            val todosLosUsuarios = withContext(Dispatchers.IO) {
+                repository.obtenerUsuarios()
+            }
+
+            _estudiantesDisponibles.value =
+                todosLosUsuarios.filter { usuario ->
+                    usuario.perfil == Perfil.ESTUDIANTE &&
+                            usuario.estadoCuenta == "ACTIVA"
+                }
+        }
+    }
+
+    // =========================================================
+    // CREAR TAREA
+    // =========================================================
+
     fun crearTarea(onSuccess: () -> Unit) {
+
         errorDescripcionTarea = null
         errorTipoTarea = null
         errorFechaTarea = null
         errorResponsable = null
+
         var formularioValido = true
 
-        if (descripcionTarea.isBlank()) { errorDescripcionTarea = "La descripción es obligatoria."; formularioValido = false }
-        if (tipoTarea.isBlank()) { errorTipoTarea = "Debe indicar el tipo (ej. Riego, Siembra)."; formularioValido = false }
-        if (fechaProgramada.isBlank()) { errorFechaTarea = "La fecha programada es obligatoria."; formularioValido = false }
-        if (responsableIdSeleccionado == null) { errorResponsable = "Debe asignar un responsable a la tarea."; formularioValido = false }
+        if (descripcionTarea.isBlank()) {
+            errorDescripcionTarea =
+                "La descripción es obligatoria."
+            formularioValido = false
+        }
 
-        if (formularioValido) {
-            viewModelScope.launch(Dispatchers.IO) {
-                val nuevaTarea = Tarea(
-                    tipo = tipoTarea,
-                    descripcion = descripcionTarea,
-                    sectorId = 1,
-                    cultivoId = null,
-                    fechaProgramada = fechaProgramada,
-                    asignadoA = responsableIdSeleccionado ?: "",
-                    estado = EstadoTarea.PENDIENTE,
-                    comentarioEstudiante = null,
-                    comentarioDocente = null,
-                    rutaFotografia = null
-                )
+        if (tipoTarea.isBlank()) {
+            errorTipoTarea =
+                "Debe indicar el tipo (ej. Riego, Siembra)."
+            formularioValido = false
+        }
+
+        if (fechaProgramada.isBlank()) {
+            errorFechaTarea =
+                "La fecha programada es obligatoria."
+            formularioValido = false
+        }
+
+        if (responsableIdSeleccionado == null) {
+            errorResponsable =
+                "Debe asignar un responsable a la tarea."
+            formularioValido = false
+        }
+
+        if (!formularioValido) return
+
+        viewModelScope.launch {
+
+            val nuevaTarea = Tarea(
+                tipo = tipoTarea,
+                descripcion = descripcionTarea,
+                sectorId = 1,
+                cultivoId = null,
+                fechaProgramada = fechaProgramada,
+                asignadoA = responsableIdSeleccionado ?: "",
+                estado = EstadoTarea.PENDIENTE,
+                comentarioEstudiante = null,
+                comentarioDocente = null,
+                rutaFotografia = null
+            )
+
+            withContext(Dispatchers.IO) {
                 repository.insertarTarea(nuevaTarea)
-                limpiarFormularioTarea()
-
-                withContext(Dispatchers.Main) {
-                    onSuccess()
-                }
             }
+
+            limpiarFormularioTarea()
+            onSuccess()
         }
     }
 
+    // =========================================================
+    // ELIMINAR TAREA
+    // =========================================================
+
     fun eliminarTarea(tarea: Tarea) {
+
         viewModelScope.launch(Dispatchers.IO) {
             repository.eliminarTarea(tarea)
         }
     }
 
+    // =========================================================
+    // LIMPIAR FORMULARIO
+    // =========================================================
+
     fun limpiarFormularioTarea() {
+
         descripcionTarea = ""
         tipoTarea = ""
         fechaProgramada = ""
         responsableIdSeleccionado = null
+
         errorDescripcionTarea = null
         errorTipoTarea = null
         errorFechaTarea = null
         errorResponsable = null
     }
 
-    fun actualizarTarea(tarea: Tarea, onSuccess: () -> Unit) {
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.actualizarTarea(tarea)
-            withContext(Dispatchers.Main) {
-                onSuccess()
+    // =========================================================
+    // ACTUALIZAR TAREA
+    // =========================================================
+
+    fun actualizarTarea(
+        tarea: Tarea,
+        onSuccess: () -> Unit
+    ) {
+
+        viewModelScope.launch {
+
+            withContext(Dispatchers.IO) {
+                repository.actualizarTarea(tarea)
             }
+
+            onSuccess()
         }
     }
 
+    // =========================================================
+    // PREPARAR EDICIÓN
+    // =========================================================
+
     fun prepararEdicion(tarea: Tarea) {
+
         descripcionTarea = tarea.descripcion
         tipoTarea = tarea.tipo
         fechaProgramada = tarea.fechaProgramada
         responsableIdSeleccionado = tarea.asignadoA
     }
 
-    // --- Validación / Evaluación por parte del Docente ---
+    // =========================================================
+    // VALIDACIÓN DE EVIDENCIAS
+    // =========================================================
+
     var comentarioValidacion by mutableStateOf("")
 
-    fun evaluarTarea(tareaId: Int, aprobada: Boolean, onSuccess: () -> Unit) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val tareaActual = _tareasBase.value.find { it.id == tareaId }
 
-            if (tareaActual != null) {
-                val nuevoEstado = if (aprobada) EstadoTarea.VALIDADA else EstadoTarea.RECHAZADA
+    fun evaluarTarea(
+        tareaId: Int,
+        aprobada: Boolean,
+        accessToken: String?,
+        onSuccess: () -> Unit,
+        onError: () -> Unit
+    ) {
+        if (accessToken.isNullOrBlank()) {
+            Log.e("TareaViewModel", "No hay token para validar")
+            onError()
+            return
+        }
 
-                val tareaActualizada = tareaActual.copy(
-                    estado = nuevoEstado,
-                    comentarioDocente = comentarioValidacion.ifBlank { null }
-                )
-                repository.actualizarTarea(tareaActualizada)
+        viewModelScope.launch {
+            try {
+                val tareaActual = _tareasBase.value
+                    .find { it.id == tareaId }
+
+                if (tareaActual == null) {
+                    Log.e("TareaViewModel", "Tarea no encontrada: $tareaId")
+                    onError()
+                    return@launch
+                }
+
+                val puedeEvaluarse =
+                    tareaActual.estado == EstadoTarea.PENDIENTE_VALIDACION ||
+                            tareaActual.estado == "REALIZADA"
+
+                if (!puedeEvaluarse) {
+                    Log.e(
+                        "TareaViewModel",
+                        "La tarea no está pendiente de validación"
+                    )
+                    onError()
+                    return@launch
+                }
+
+                val tareaActualizada =
+                    RetrofitClient.tareaApi.validarEvidencia(
+                        token = "Bearer $accessToken",
+                        tareaId = tareaId.toLong(),
+                        request = ValidacionRequestDto(
+                            aprobada = aprobada,
+                            observacion = comentarioValidacion.trim()
+                        )
+                    )
+
+                _tareasBase.value = _tareasBase.value.map { tarea ->
+                    if (tarea.id == tareaId) {
+                        tareaActualizada.aTareaLocal()
+                    } else {
+                        tarea
+                    }
+                }
 
                 comentarioValidacion = ""
-                withContext(Dispatchers.Main) {
-                    onSuccess()
-                }
+
+                Log.d(
+                    "TareaViewModel",
+                    "Tarea $tareaId validada: ${tareaActualizada.estado}"
+                )
+
+                onSuccess()
+
+            } catch (e: CancellationException) {
+                throw e
+
+            } catch (e: Exception) {
+                Log.e(
+                    "TareaViewModel",
+                    "Error al validar tarea $tareaId",
+                    e
+                )
+                onError()
             }
         }
     }
 
-    // --- Registro de Evidencia Fotográfica (Invocado desde EvidenciaScreen) ---
-    fun guardarEvidenciaPorId(tareaId: Int, comentario: String?, rutaFoto: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val tareas = repository.obtenerTodasLasTareas()
-            val tareaEncontrada = tareas.find { it.id == tareaId }
-            tareaEncontrada?.let { tarea ->
-                repository.marcarTareaComoRealizada(tarea, comentario, rutaFoto)
+
+    // =========================================================
+    // REGISTRO DE EVIDENCIA FOTOGRÁFICA
+    // =========================================================
+
+
+
+    fun guardarEvidenciaPorId(
+        tareaId: Int,
+        comentario: String?,
+        rutaFoto: String,
+        accessToken: String?,
+        onSuccess: () -> Unit,
+        onError: () -> Unit
+    ) {
+        if (accessToken.isNullOrBlank()) {
+            Log.e("TareaViewModel", "No hay token de autenticación")
+            onError()
+            return
+        }
+
+        viewModelScope.launch {
+            var archivoTemporal: File? = null
+
+            try {
+                val context = getApplication<Application>()
+                val uri = Uri.parse(rutaFoto)
+
+                val tipoMime = context.contentResolver
+                    .getType(uri)
+                    ?: "image/jpeg"
+
+                val extension = MimeTypeMap
+                    .getSingleton()
+                    .getExtensionFromMimeType(tipoMime)
+                    ?: "jpg"
+
+                val archivo = withContext(Dispatchers.IO) {
+                    File.createTempFile(
+                        "evidencia_",
+                        ".$extension",
+                        context.cacheDir
+                    ).also { destino ->
+                        archivoTemporal = destino
+
+                        context.contentResolver
+                            .openInputStream(uri)
+                            ?.use { entrada ->
+                                destino.outputStream().use { salida ->
+                                    entrada.copyTo(salida)
+                                }
+                            } ?: error("No se pudo abrir la fotografía")
+                    }
+                }
+
+                val requestBody = archivo.asRequestBody(
+                    tipoMime.toMediaType()
+                )
+
+                val multipart = MultipartBody.Part.createFormData(
+                    "archivo",
+                    archivo.name,
+                    requestBody
+                )
+
+                val tareaActualizada =
+                    RetrofitClient.tareaApi.subirEvidenciaArchivo(
+                        token = "Bearer $accessToken",
+                        tareaId = tareaId.toLong(),
+                        archivo = multipart
+                    )
+
+                _tareasBase.value = _tareasBase.value.map { tarea ->
+                    if (tarea.id == tareaId) {
+                        tareaActualizada.aTareaLocal().copy(
+                            comentarioEstudiante = comentario
+                        )
+                    } else {
+                        tarea
+                    }
+                }
+
+                Log.d(
+                    "TareaViewModel",
+                    "Evidencia enviada correctamente: tarea $tareaId"
+                )
+
+                onSuccess()
+
+            } catch (e: CancellationException) {
+                throw e
+
+            } catch (e: Exception) {
+                Log.e(
+                    "TareaViewModel",
+                    "Error al subir evidencia de tarea $tareaId",
+                    e
+                )
+                onError()
+
+            } finally {
+                archivoTemporal?.delete()
             }
         }
     }

@@ -5,10 +5,11 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "usuarios")
 data class Usuario(
-    @PrimaryKey val identificador: String, // ej: "admin1", "estudiante1"
+    @PrimaryKey val identificador: String,
     val nombreFicticio: String,
-    val perfil: String, // "ADMINISTRADOR", "ESTUDIANTE"
+    val perfil: String,
     val tallerAsignado: String,
-    val estadoCuenta: String, // "ACTIVA", "INACTIVA"
-    val contrasena: String    // 🔑 NUEVO: Contraseña para proteger el acceso
+    val estadoCuenta: String,
+    val contrasena: String,
+    val backendId: Long? = null
 )

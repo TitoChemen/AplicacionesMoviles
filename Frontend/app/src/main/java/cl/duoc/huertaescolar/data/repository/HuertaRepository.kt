@@ -3,6 +3,7 @@ package cl.duoc.huertaescolar.data.repository
 import cl.duoc.huertaescolar.data.local.dao.*
 import cl.duoc.huertaescolar.data.local.entity.*
 import kotlinx.coroutines.flow.Flow
+import cl.duoc.huertaescolar.data.EstadoTarea
 
 class HuertaRepository(
     private val sectorDao: SectorDao,
@@ -122,18 +123,22 @@ class HuertaRepository(
         sectorDao.eliminarSector(sector)
     }
 
+
     suspend fun marcarTareaComoRealizada(
         tarea: Tarea,
         comentarioEstudiante: String?,
         rutaFoto: String
     ) {
         val tareaActualizada = tarea.copy(
-            estado = "REALIZADA",
+            estado = EstadoTarea.PENDIENTE_VALIDACION,
             comentarioEstudiante = comentarioEstudiante?.ifBlank { null },
+            comentarioDocente = null,
             rutaFotografia = rutaFoto
         )
+
         tareaDao.actualizarTarea(tareaActualizada)
     }
+
 
     // Alertas
     fun obtenerHistorialAlertas() = alertaDao.obtenerHistorialAlertas()
