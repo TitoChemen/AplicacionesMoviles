@@ -8,7 +8,9 @@ public record UsuarioResponse(
         String nombre,
         String correo,
         Rol rol,
-        Boolean activo
+        Boolean activo,
+        Long cursoId,
+        String cursoCodigo
 ) {
     public static UsuarioResponse from(Usuario u) {
         return new UsuarioResponse(
@@ -16,7 +18,9 @@ public record UsuarioResponse(
                 u.getNombre(),
                 u.getCorreo(),
                 u.getRol(),
-                u.getActivo()
+                u.getActivo(),
+                u.getCursoId(),
+                u.getCurso() == null ? null : u.getCurso().getCodigo()
         );
     }
 }

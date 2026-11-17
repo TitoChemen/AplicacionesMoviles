@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.security.access.AccessDeniedException;
+import cl.duoc.tareas_service.security.CursoActual;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -22,10 +23,12 @@ import java.time.Duration;
 public class ReferenciaService {
 
     private final RestClient client;
+    private final CursoActual acceso;
 
     public ReferenciaService(
             @Value("${app.services.gateway-url:http://localhost:8080}")
-            String gatewayUrl) {
+            String gatewayUrl, CursoActual acceso) {
+        this.acceso = acceso;
 
         SimpleClientHttpRequestFactory factory =
                 new SimpleClientHttpRequestFactory();
@@ -72,6 +75,9 @@ public class ReferenciaService {
                     .retrieve()
                     .body(UsuarioResponse.class);
 
+        } catch (HttpClientErrorException.Forbidden e) {
+            throw new AccessDeniedException("Recurso de otro curso");
+
         } catch (HttpClientErrorException.NotFound e) {
 
             throw new ResponseStatusException(
@@ -110,7 +116,7 @@ public class ReferenciaService {
     // VALIDAR SECTOR ACTIVO
     // ==========================================
 
-    public void validarSector(Long sectorId) {
+    public Long validarSector(Long sectorId) {
 
         if (sectorId == null || sectorId <= 0) {
             throw new ResponseStatusException(
@@ -128,6 +134,9 @@ public class ReferenciaService {
                             headers.setBearerAuth(tokenActual()))
                     .retrieve()
                     .body(SectorResponse.class);
+
+        } catch (HttpClientErrorException.Forbidden e) {
+            throw new AccessDeniedException("Recurso de otro curso");
 
         } catch (HttpClientErrorException.NotFound e) {
 
@@ -171,13 +180,18 @@ public class ReferenciaService {
                     "El sector no existe o no esta activo"
             );
         }
+        acceso.exigirCurso(sector.cursoId());
+        if (sector.cursoId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El sector no tiene curso asignado");
+        }
+        return sector.cursoId();
     }
 
     // ==========================================
     // VALIDAR ESTUDIANTE ACTIVO
     // ==========================================
 
-    public void validarEstudiante(Long estudianteId) {
+    public Long validarEstudiante(Long estudianteId) {
 
         if (estudianteId == null || estudianteId <= 0) {
             throw new ResponseStatusException(
@@ -198,13 +212,18 @@ public class ReferenciaService {
                     "El usuario no es un estudiante activo"
             );
         }
+        acceso.exigirCurso(usuario.cursoId());
+        if (usuario.cursoId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El estudiante no tiene curso asignado");
+        }
+        return usuario.cursoId();
     }
 
     // ==========================================
     // VALIDAR CUALQUIER USUARIO ACTIVO
     // ==========================================
 
-    public void validarUsuarioActivo(Long usuarioId) {
+    public Long validarUsuarioActivo(Long usuarioId) {
 
         if (usuarioId == null || usuarioId <= 0) {
             throw new ResponseStatusException(
@@ -224,6 +243,8 @@ public class ReferenciaService {
                     "El usuario no existe o esta inactivo"
             );
         }
+        acceso.exigirCurso(usuario.cursoId());
+        return usuario.cursoId();
     }
 
     // ==========================================
@@ -232,12 +253,14 @@ public class ReferenciaService {
 
     public record SectorResponse(
             Long id,
-            String estado
+            String estado,
+            Long cursoId
     ) {}
 
     public record UsuarioResponse(
             Long id,
             String rol,
-            Boolean activo
+            Boolean activo,
+            Long cursoId
     ) {}
 }

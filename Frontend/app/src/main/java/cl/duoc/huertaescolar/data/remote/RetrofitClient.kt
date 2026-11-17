@@ -29,6 +29,8 @@ object RetrofitClient {
             .build()
     }
 
+    val usuarioApi: UsuarioApi by lazy { retrofit.create(UsuarioApi::class.java) }
+
     val authApi: AuthApi by lazy {
         retrofit.create(AuthApi::class.java)
     }
@@ -36,6 +38,8 @@ object RetrofitClient {
     val tareaApi: TareaApi by lazy {
         retrofit.create(TareaApi::class.java)
     }
+
+    val cursoApi: CursoApi by lazy { retrofit.create(CursoApi::class.java) }
 
     val sectorApi: SectorApi by lazy {
         retrofit.create(SectorApi::class.java)

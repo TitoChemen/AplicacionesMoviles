@@ -11,13 +11,16 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: true
 
 server:
   port: 8081
 
 app:
+  # SOLO demostracion local, reemplazar por false antes de desplegar.
+  auth:
+    plaintext-dev: ${PLAINTEXT_DEV:true}
   jwt:
     issuer: huerta-escolar
     secret: ${JWT_SECRET}

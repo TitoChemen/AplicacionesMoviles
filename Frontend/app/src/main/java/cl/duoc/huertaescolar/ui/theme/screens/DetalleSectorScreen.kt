@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material.icons.filled.Eco
@@ -23,7 +24,8 @@ import cl.duoc.huertaescolar.viewmodel.SectorViewModel
 fun DetalleSectorScreen(
     navController: NavController,
     viewModel: SectorViewModel,
-    sectorId: Int // Recibimos el ID desde la ruta de navegación
+    sectorId: Int,
+    puedeGestionar: Boolean
 ) {
     val sectores by viewModel.sectores.collectAsState()
     val cultivos by viewModel.cultivos.collectAsState()
@@ -31,6 +33,28 @@ fun DetalleSectorScreen(
     // Buscamos el sector actual y filtramos solo sus cultivos asociados
     val sectorActual = sectores.find { it.id == sectorId }
     val cultivosDelSector = cultivos.filter { it.sectorId == sectorId }
+    var confirmarEliminacion by remember(sectorId) { mutableStateOf(false) }
+    DisposableEffect(sectorId) {
+        viewModel.limpiarErrorSector()
+        onDispose { viewModel.limpiarErrorSector() }
+    }
+
+    if (confirmarEliminacion && sectorActual != null) {
+        AlertDialog(
+            onDismissRequest = { confirmarEliminacion = false },
+            title = { Text("¿Eliminar sector?") },
+            text = { Text("Esta acción elimina definitivamente el sector vacío \"${sectorActual.nombre}\". No se puede deshacer.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmarEliminacion = false
+                    viewModel.eliminarSector(sectorActual) { navController.popBackStack() }
+                }) { Text("Eliminar definitivamente") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmarEliminacion = false }) { Text("Cancelar") }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -48,7 +72,7 @@ fun DetalleSectorScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
+            if (puedeGestionar && sectorActual != null && sectorActual.estado == "ACTIVO") FloatingActionButton(
                 onClick = { navController.navigate("crear_cultivo/$sectorId") },
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
@@ -92,24 +116,54 @@ fun DetalleSectorScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // BOTÓN DE ELIMINAR SECTOR (Adiós sector cochino)
-                        Button(
-                            onClick = {
-                                viewModel.eliminarSector(sectorActual)
-                                navController.popBackStack()
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.error
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Eliminar este Sector")
+                        Text("Estado: ${if (sectorActual.estado == "INACTIVO") "Archivado" else sectorActual.estado}",
+                            style = MaterialTheme.typography.labelMedium)
+                        if (puedeGestionar) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedButton(
+                                onClick = { navController.navigate("editar_sector/$sectorId") },
+                                enabled = !viewModel.cargando,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Edit, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Editar sector")
+                            }
+                            if (cultivosDelSector.isNotEmpty()) {
+                                Text(
+                                    "Este sector tiene ${cultivosDelSector.size} cultivo(s). " +
+                                        "No es posible eliminarlo sin perderlos. Puedes archivarlo sin borrar datos.",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            if (sectorActual.estado != "INACTIVO") {
+                                OutlinedButton(
+                                    onClick = {
+                                        viewModel.archivarSector(sectorActual) { /* Estado actualizado localmente */ }
+                                    },
+                                    enabled = !viewModel.cargando,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("Archivar sector (conservar cultivos)") }
+                            }
+                            Button(
+                                onClick = { confirmarEliminacion = true },
+                                enabled = !viewModel.cargando && cultivosDelSector.isEmpty(),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.error
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = null,
+                                    modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("Eliminar sector vacío")
+                            }
+                            if (viewModel.cargando) LinearProgressIndicator(Modifier.fillMaxWidth())
+                            viewModel.errorGeneral?.let { error ->
+                                Text(error, color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodyMedium)
+                            }
                         }
                     }
                 }

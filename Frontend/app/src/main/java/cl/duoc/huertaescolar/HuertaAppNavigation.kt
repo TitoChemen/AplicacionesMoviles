@@ -4,6 +4,12 @@ package cl.duoc.huertaescolar
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
+import androidx.compose.material3.Surface
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import cl.duoc.huertaescolar.data.Perfil
+import cl.duoc.huertaescolar.data.local.entity.Usuario
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -62,10 +68,17 @@ fun HuertaAppNavigation() {
     // NAVEGACIÓN PRINCIPAL
     // =====================================
 
-    NavHost(
-        navController = navController,
-        startDestination = "login"
-    ) {
+    Column(modifier = Modifier.fillMaxSize()
+        .statusBarsPadding().navigationBarsPadding()) {
+        if (usuario != null && !accessToken.isNullOrBlank()) {
+            EncabezadoSesion(usuario)
+        }
+
+        NavHost(
+            navController = navController,
+            startDestination = "login",
+            modifier = Modifier.weight(1f)
+        ) {
 
         // =====================================
         // LOGIN
@@ -90,7 +103,7 @@ fun HuertaAppNavigation() {
 
                         if (
                             usuarioActual?.perfil ==
-                            "ADMINISTRADOR"
+                            "ADMINISTRADOR" || usuarioActual?.perfil == "DOCENTE"
                         ) {
                             navController.navigate("menu_admin") {
                                 popUpTo("login") {
@@ -193,23 +206,11 @@ fun HuertaAppNavigation() {
 
             SectorScreen(
                 viewModel = sectorViewModel,
-
-                onNavigateToCamera = {
-                    navController.navigate("evidencia/1")
-                },
-
-                onBackClick = {
-                    navController.popBackStack()
-                },
-
-                idResponsable =
-                    usuario?.identificador ?: "admin1",
-
-                onSectorClick = { id ->
-                    navController.navigate(
-                        "detalle_sector/$id"
-                    )
-                }
+                onBackClick = { navController.popBackStack() },
+                onCrearSector = { navController.navigate("crear_sector") },
+                puedeCrear = Perfil.esPersonal(usuario?.perfil),
+                esAdminGlobal = usuario?.perfil == Perfil.ADMINISTRADOR,
+                onSectorClick = { id -> navController.navigate("detalle_sector/$id") }
             )
         }
 
@@ -223,9 +224,27 @@ fun HuertaAppNavigation() {
                 navController = navController,
                 viewModel = sectorViewModel,
 
-                idAdministradorActivo =
-                    usuario?.identificador ?: "admin1"
+                idAdministradorActivo = usuario?.identificador ?: "admin1",
+                esAdminGlobal = usuario?.perfil == Perfil.ADMINISTRADOR
             )
+        }
+
+        // =====================================
+        // EDICIÓN DE SECTOR (DOCENTE / ADMIN)
+        // =====================================
+        composable(
+            route = "editar_sector/{sectorId}",
+            arguments = listOf(navArgument("sectorId") { type = NavType.IntType })
+        ) { entry ->
+            if (Perfil.esPersonal(usuario?.perfil)) {
+                EditarSectorScreen(
+                    navController = navController,
+                    viewModel = sectorViewModel,
+                    sectorId = entry.arguments?.getInt("sectorId") ?: 0
+                )
+            } else {
+                LaunchedEffect(Unit) { navController.popBackStack() }
+            }
         }
 
         // =====================================
@@ -248,7 +267,8 @@ fun HuertaAppNavigation() {
             DetalleSectorScreen(
                 navController = navController,
                 viewModel = sectorViewModel,
-                sectorId = sectorId
+                sectorId = sectorId,
+                puedeGestionar = Perfil.esPersonal(usuario?.perfil)
             )
         }
 
@@ -283,7 +303,6 @@ fun HuertaAppNavigation() {
         listOf(
             "lista_tareas",
             "mis_tareas",
-            "historial_actividades",
             "revision_tareas"
         ).forEach { ruta ->
 
@@ -292,9 +311,22 @@ fun HuertaAppNavigation() {
                 ListaTareasScreen(
                     navController = navController,
                     viewModel = tareaViewModel,
-                    usuarioActivo = usuario
+                    usuarioActivo = usuario,
+                    accessToken = accessToken
                 )
             }
+        }
+
+        composable("historial_actividades") {
+            HistorialActividadesScreen(navController, tareaViewModel)
+        }
+
+        composable(
+            route = "historial_tarea/{tareaId}",
+            arguments = listOf(navArgument("tareaId") { type = NavType.IntType })
+        ) { entry ->
+            val tareaId = entry.arguments?.getInt("tareaId") ?: 0
+            HistorialTareaScreen(navController, tareaViewModel, tareaId, accessToken)
         }
 
         // =====================================
@@ -305,7 +337,8 @@ fun HuertaAppNavigation() {
 
             CrearTareaScreen(
                 navController = navController,
-                viewModel = tareaViewModel
+                viewModel = tareaViewModel,
+                accessToken = accessToken
             )
         }
 
@@ -402,6 +435,38 @@ fun HuertaAppNavigation() {
                 "Reportes Huerto"
             ) {
                 navController.popBackStack()
+            }
+        }
+        }
+    }
+}
+
+@Composable
+private fun EncabezadoSesion(usuario: Usuario?) {
+    if (usuario == null) return
+    Surface(color = MaterialTheme.colorScheme.primaryContainer) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Hola, ${if (Perfil.esPersonal(usuario.perfil)) usuario.nombreFicticio else usuario.nombreFicticio.substringBefore(' ')}",
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                val cargo = when (usuario.perfil) {
+                    Perfil.ADMINISTRADOR -> "Administrador global · Todos los cursos"
+                    Perfil.DOCENTE -> "Docente · ${usuario.tallerAsignado}"
+                    else -> "Estudiante · ${usuario.tallerAsignado}"
+                }
+                Text(
+                    text = cargo,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }

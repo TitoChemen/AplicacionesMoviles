@@ -31,4 +31,7 @@ public class Sector {
     private String fechaCreacion;
 
     private String responsableId;
+
+    @Column(name = "curso_id")
+    private Long cursoId;
 }

@@ -12,4 +12,6 @@ public interface UsuarioRepository
     Optional<Usuario> findByCorreo(String correo);
 
     boolean existsByCorreo(String correo);
+
+    java.util.List<Usuario> findByCursoId(Long cursoId);
 }

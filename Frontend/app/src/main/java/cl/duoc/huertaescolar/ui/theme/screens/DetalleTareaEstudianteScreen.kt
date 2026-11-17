@@ -191,6 +191,11 @@ fun DetalleTareaEstudianteScreen(
                     }
                 }
 
+                OutlinedButton(
+                    onClick = { navController.navigate("historial_tarea/${tarea.id}") },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Ver historial de evidencias") }
+
                 // ENVIAR O REENVIAR EVIDENCIA
                 if (puedeEnviarEvidencia) {
 

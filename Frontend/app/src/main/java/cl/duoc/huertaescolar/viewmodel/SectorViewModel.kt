@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import cl.duoc.huertaescolar.data.local.entity.Cultivo
 import cl.duoc.huertaescolar.data.local.entity.Sector
 import cl.duoc.huertaescolar.data.remote.CrearCultivoRequestDto
+import cl.duoc.huertaescolar.data.remote.CursoDto
 import cl.duoc.huertaescolar.data.remote.CrearSectorRequestDto
 import cl.duoc.huertaescolar.data.remote.RetrofitClient
 import cl.duoc.huertaescolar.data.remote.aCultivoLocal
@@ -21,6 +22,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.util.UUID
+import retrofit2.HttpException
+import org.json.JSONObject
 
 class SectorViewModel(application: Application) :
     AndroidViewModel(application) {
@@ -34,6 +37,37 @@ class SectorViewModel(application: Application) :
     val cultivos = _cultivos.asStateFlow()
 
     private var accessToken: String? = null
+    private val _cursosDisponibles = MutableStateFlow<List<CursoDto>>(emptyList())
+    val cursosDisponibles = _cursosDisponibles.asStateFlow()
+    var cursoSeleccionadoId by mutableStateOf<Long?>(null)
+    private val _idCursoPorSector = MutableStateFlow<Map<Int, Long?>>(emptyMap())
+    private val _cursoPorSector = MutableStateFlow<Map<Int, String>>(emptyMap())
+    val cursoPorSector = _cursoPorSector.asStateFlow()
+
+    private fun actualizarNombreCursoSector() {
+        val nombrePorId = _cursosDisponibles.value.associate { it.id to it.codigo }
+        _cursoPorSector.value = _idCursoPorSector.value.mapValues { (_, cursoId) ->
+            cursoId?.let { nombrePorId[it] ?: "Curso #$it" } ?: "Sin curso"
+        }
+    }
+
+    fun cargarCursos() {
+        if (accessToken.isNullOrBlank()) return
+        viewModelScope.launch {
+            try {
+                val cursos = RetrofitClient.cursoApi.listar(tokenAutenticado())
+                _cursosDisponibles.value = cursos
+                actualizarNombreCursoSector()
+                if (cursoSeleccionadoId != null && cursos.none { it.id == cursoSeleccionadoId })
+                    cursoSeleccionadoId = null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                errorGeneral = "No se pudo obtener la lista de cursos: ${e.message}"
+            }
+        }
+    }
+
 
     var cargando by mutableStateOf(false)
         private set
@@ -51,6 +85,10 @@ class SectorViewModel(application: Application) :
         accessToken = token
         _sectores.value = emptyList()
         _cultivos.value = emptyList()
+        _cursosDisponibles.value = emptyList()
+        _cursoPorSector.value = emptyMap()
+        _idCursoPorSector.value = emptyMap()
+        cursoSeleccionadoId = null
         errorGeneral = null
 
         if (!token.isNullOrBlank()) {
@@ -92,6 +130,10 @@ class SectorViewModel(application: Application) :
 
                 _sectores.value =
                     sectoresRemotos.map { it.aSectorLocal() }
+                _idCursoPorSector.value = sectoresRemotos.associate { s ->
+                    s.id.toInt() to s.cursoId
+                }
+                actualizarNombreCursoSector()
 
                 _cultivos.value =
                     cultivosRemotos.map { it.aCultivoLocal() }
@@ -143,6 +185,7 @@ class SectorViewModel(application: Application) :
 
     fun registrarSector(
         responsableId: String,
+        esAdminGlobal: Boolean = false,
         onSuccess: () -> Unit
     ) {
         if (cargando) return
@@ -161,6 +204,10 @@ class SectorViewModel(application: Application) :
                 "La ubicación del sector es obligatoria."
         }
 
+        if (esAdminGlobal && cursoSeleccionadoId == null) {
+            errorGeneral = "Selecciona un curso para el sector."
+            return
+        }
         if (
             errorNombreSector != null ||
             errorUbicacionSector != null
@@ -183,7 +230,8 @@ class SectorViewModel(application: Application) :
                     ubicacion = ubicacionSector.trim(),
                     estado = "ACTIVO",
                     fechaCreacion = LocalDate.now().toString(),
-                    responsableId = responsableId
+                    responsableId = responsableId,
+                    cursoId = if (esAdminGlobal) cursoSeleccionadoId else null
                 )
 
                 val creado =
@@ -200,6 +248,7 @@ class SectorViewModel(application: Application) :
                 nombreSector = ""
                 ubicacionSector = ""
                 descripcionSector = ""
+                cursoSeleccionadoId = null
 
                 onSuccess()
 
@@ -221,51 +270,110 @@ class SectorViewModel(application: Application) :
     }
 
     // =====================================
-    // ELIMINAR SECTOR DE MARIADB
+    // EDITAR / ARCHIVAR / ELIMINAR SECTORES
     // =====================================
 
-    fun eliminarSector(sector: Sector) {
+    private fun mensajeErrorSector(e: Exception, accion: String): String {
+        if (e is HttpException) {
+            val detalle = runCatching {
+                val cuerpo = e.response()?.errorBody()?.string().orEmpty()
+                val json = JSONObject(cuerpo)
+                json.optString("error").takeIf { it.isNotBlank() }
+                    ?: json.optString("detail").takeIf { it.isNotBlank() }
+                    ?: json.optString("message").takeIf { it.isNotBlank() }
+            }.getOrNull()
+            return when (e.code()) {
+                400 -> detalle ?: "Los datos del sector no son válidos."
+                401 -> "La sesión venció. Vuelve a iniciar sesión."
+                403 -> "Tu cuenta no tiene permisos para $accion este sector."
+                404 -> "El sector ya no existe en la base de datos."
+                409 -> detalle ?: "El sector tiene datos relacionados y no se puede eliminar. Puedes archivarlo."
+                else -> detalle ?: "Error del servidor (${e.code()}) al $accion el sector."
+            }
+        }
+        return "No se pudo $accion el sector: ${e.localizedMessage ?: "Error de conexión"}"
+    }
+
+    fun limpiarErrorSector() { errorGeneral = null }
+
+    fun editarSector(
+        sector: Sector,
+        nombre: String,
+        ubicacion: String,
+        descripcion: String,
+        estado: String,
+        onSuccess: () -> Unit
+    ) {
         if (cargando) return
+        errorGeneral = null
+        if (nombre.isBlank() || ubicacion.isBlank()) {
+            errorGeneral = "El nombre y la ubicación son obligatorios."
+            return
+        }
+        if (estado !in setOf("ACTIVO", "INACTIVO")) {
+            errorGeneral = "Selecciona un estado válido."
+            return
+        }
 
         viewModelScope.launch {
             cargando = true
-            errorGeneral = null
-
             try {
-                RetrofitClient.sectorApi.eliminar(
-                    token = tokenAutenticado(),
-                    id = sector.id.toLong()
+                val actualizado = RetrofitClient.sectorApi.actualizar(
+                    tokenAutenticado(),
+                    sector.id.toLong(),
+                    CrearSectorRequestDto(
+                        codigo = sector.codigo, // Código inmutable: protege referencias existentes.
+                        nombre = nombre.trim(),
+                        descripcion = descripcion.trim(),
+                        ubicacion = ubicacion.trim(),
+                        estado = estado,
+                        fechaCreacion = sector.fechaCreacion,
+                        responsableId = sector.responsableId,
+                        cursoId = _idCursoPorSector.value[sector.id]
+                    )
                 )
-
-                _sectores.value =
-                    _sectores.value.filterNot {
-                        it.id == sector.id
-                    }
-
-                // Recargar datos desde MariaDB
-                val token = tokenAutenticado()
-
-                _sectores.value =
-                    RetrofitClient.sectorApi
-                        .listar(token)
-                        .map { it.aSectorLocal() }
-
-                _cultivos.value =
-                    RetrofitClient.cultivoApi
-                        .listar(token)
-                        .map { it.aCultivoLocal() }
-
+                _sectores.value = _sectores.value.map {
+                    if (it.id == sector.id) actualizado.aSectorLocal() else it
+                }
+                _idCursoPorSector.value = _idCursoPorSector.value +
+                    (sector.id to actualizado.cursoId)
+                actualizarNombreCursoSector()
+                onSuccess()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.e(
-                    "SectorViewModel",
-                    "Error eliminando sector",
-                    e
-                )
+                Log.e("SectorViewModel", "Error editando sector", e)
+                errorGeneral = mensajeErrorSector(e, "editar")
+            } finally {
+                cargando = false
+            }
+        }
+    }
 
-                errorGeneral =
-                    "No se pudo eliminar el sector: ${e.message}"
+    fun archivarSector(sector: Sector, onSuccess: () -> Unit) {
+        editarSector(sector, sector.nombre, sector.ubicacion,
+            sector.descripcion, "INACTIVO", onSuccess)
+    }
+
+    fun eliminarSector(sector: Sector, onSuccess: () -> Unit) {
+        if (cargando) return
+        errorGeneral = null
+        viewModelScope.launch {
+            cargando = true
+            try {
+                RetrofitClient.sectorApi.eliminar(
+                    token = tokenAutenticado(), id = sector.id.toLong()
+                )
+                _sectores.value = _sectores.value.filterNot { it.id == sector.id }
+                _cultivos.value = _cultivos.value.filterNot { it.sectorId == sector.id }
+                _idCursoPorSector.value = _idCursoPorSector.value - sector.id
+                _cursoPorSector.value = _cursoPorSector.value - sector.id
+                onSuccess() // Navegar solo cuando el backend confirmó el borrado.
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e("SectorViewModel", "Error eliminando sector", e)
+                errorGeneral = mensajeErrorSector(e, "eliminar")
             } finally {
                 cargando = false
             }

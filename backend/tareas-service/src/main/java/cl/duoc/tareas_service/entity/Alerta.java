@@ -26,6 +26,9 @@ public class Alerta {
 
     private Long usuarioId;
 
+    @Column(name = "curso_id")
+    private Long cursoId;
+
     private String fechaReporte;
 
     @Column(nullable = false)

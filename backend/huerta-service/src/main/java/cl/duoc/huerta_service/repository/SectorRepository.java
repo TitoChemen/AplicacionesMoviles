@@ -7,4 +7,6 @@ public interface SectorRepository
         extends JpaRepository<Sector, Long> {
 
     boolean existsByCodigo(String codigo);
+
+    java.util.List<cl.duoc.huerta_service.entity.Sector> findByCursoId(Long cursoId);
 }

@@ -26,25 +26,32 @@ public class UsuarioController {
             @AuthenticationPrincipal Jwt jwt) {
 
         Long id = Long.valueOf(jwt.getSubject());
-        return service.buscar(id);
+        return service.miPerfil(id);
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    @PreAuthorize("hasAnyRole('DOCENTE','ADMINISTRADOR')")
     public List<UsuarioResponse> listar() {
         return service.listar();
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    @PreAuthorize("hasAnyRole('DOCENTE','ADMINISTRADOR')")
     public UsuarioResponse buscar(@PathVariable Long id) {
         return service.buscar(id);
+    }
+
+    // Matricular una cuenta nueva sin curso SOLO en el curso del docente autenticado.
+    @PatchMapping("/{id}/matricular")
+    @PreAuthorize("hasRole('DOCENTE')")
+    public UsuarioResponse matricular(@PathVariable Long id) {
+        return service.asignarCurso(id);
     }
 
     public record NombreRequest(String nombre) {}
 
     @PatchMapping("/{id}/nombre")
-    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    @PreAuthorize("hasRole('DOCENTE')")
     public UsuarioResponse actualizarNombre(
             @PathVariable Long id,
             @RequestBody NombreRequest request) {
@@ -55,7 +62,7 @@ public class UsuarioController {
     public record EstadoRequest(boolean activo) {}
 
     @PatchMapping("/{id}/estado")
-    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    @PreAuthorize("hasRole('DOCENTE')")
     public UsuarioResponse cambiarEstado(
             @PathVariable Long id,
             @RequestBody EstadoRequest request) {

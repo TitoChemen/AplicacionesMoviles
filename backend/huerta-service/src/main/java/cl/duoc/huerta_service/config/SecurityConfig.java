@@ -63,6 +63,12 @@ public class SecurityConfig {
             if (rol == null) {
                 return List.of();
             }
+            // JWT previos: ADMINISTRADOR era antes un profesor.
+            // Nunca elevar esos tokens al rol administrador global.
+            if ("ADMINISTRADOR".equals(rol)
+                    && !Boolean.TRUE.equals(jwt.getClaim("adminGlobal"))) {
+                return List.of();
+            }
 
             return List.of(
                     new SimpleGrantedAuthority("ROLE_" + rol)
@@ -98,7 +104,7 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/sectores/**",
                                 "/api/cultivos/**"
-                        ).hasRole("ADMINISTRADOR")
+                        ).hasAnyRole("DOCENTE", "ADMINISTRADOR")
 
                         // Denegar cualquier otra ruta
                         .anyRequest().denyAll()

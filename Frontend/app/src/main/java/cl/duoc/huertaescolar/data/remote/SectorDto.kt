@@ -11,7 +11,8 @@ data class SectorResponseDto(
     val ubicacion: String?,
     val estado: String,
     val fechaCreacion: String?,
-    val responsableId: String?
+    val responsableId: String?,
+    val cursoId: Long? = null
 )
 
 data class CrearSectorRequestDto(
@@ -21,7 +22,8 @@ data class CrearSectorRequestDto(
     val ubicacion: String,
     val estado: String,
     val fechaCreacion: String,
-    val responsableId: String
+    val responsableId: String,
+    val cursoId: Long? = null
 )
 
 fun SectorResponseDto.aSectorLocal(): Sector = Sector(

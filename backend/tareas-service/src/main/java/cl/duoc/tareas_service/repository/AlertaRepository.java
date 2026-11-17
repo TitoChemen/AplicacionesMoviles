@@ -10,6 +10,10 @@ public interface AlertaRepository
         extends JpaRepository<Alerta, Long> {
 
     List<Alerta> findBySectorId(Long sectorId);
+    List<Alerta> findByCursoId(Long cursoId);
+    List<Alerta> findByCursoIdAndSectorId(Long cursoId, Long sectorId);
+    List<Alerta> findByCursoIdAndUsuarioId(Long cursoId, Long usuarioId);
+    List<Alerta> findByCursoIdAndSectorIdAndUsuarioId(Long cursoId, Long sectorId, Long usuarioId);
 
     List<Alerta> findByEstado(String estado);
 

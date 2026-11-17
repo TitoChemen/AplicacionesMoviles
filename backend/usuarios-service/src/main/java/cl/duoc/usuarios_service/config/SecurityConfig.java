@@ -30,7 +30,18 @@ import java.util.List;
 public class SecurityConfig {
 
     @Bean
-    PasswordEncoder passwordEncoder() {
+    PasswordEncoder passwordEncoder(
+            @Value("${app.auth.plaintext-dev:false}") boolean plaintextDev) {
+        if (plaintextDev) {
+            return new PasswordEncoder() {
+                @Override public String encode(CharSequence rawPassword) {
+                    return rawPassword.toString();
+                }
+                @Override public boolean matches(CharSequence rawPassword, String storedPassword) {
+                    return rawPassword.toString().equals(storedPassword);
+                }
+            };
+        }
         return new BCryptPasswordEncoder();
     }
 
@@ -90,6 +101,12 @@ public class SecurityConfig {
             if (rol == null) {
                 return List.of();
             }
+            // JWT previos: ADMINISTRADOR era antes un profesor.
+            // Nunca elevar esos tokens al rol administrador global.
+            if ("ADMINISTRADOR".equals(rol)
+                    && !Boolean.TRUE.equals(jwt.getClaim("adminGlobal"))) {
+                return List.of();
+            }
 
             return List.of(
                     new SimpleGrantedAuthority("ROLE_" + rol)
@@ -129,7 +146,7 @@ public class SecurityConfig {
                         ).permitAll()
 
                         // Usuarios requieren autenticacion.
-                        .requestMatchers("/api/usuarios/**")
+                        .requestMatchers("/api/usuarios/**", "/api/cursos/**")
                         .authenticated()
 
                         // Bloquear cualquier otra ruta.

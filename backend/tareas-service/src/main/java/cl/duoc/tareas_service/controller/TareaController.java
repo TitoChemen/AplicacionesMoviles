@@ -26,6 +26,11 @@ public class TareaController {
         return service.listar();
     }
 
+    @GetMapping("/{id}/historial")
+    public List<HistorialTarea> historial(@PathVariable Long id) {
+        return service.historial(id);
+    }
+
     @GetMapping("/{id}")
     public Tarea buscar(@PathVariable Long id) {
         return service.buscar(id);
@@ -73,7 +78,8 @@ public class TareaController {
     // ==========================================
 
     public record EvidenciaRequest(
-            String evidenciaUrl) {}
+            String evidenciaUrl,
+            String comentarioEstudiante) {}
 
     @PostMapping(
             value = "/{id}/evidencias",
@@ -85,7 +91,8 @@ public class TareaController {
 
         return service.entregarEvidencia(
                 id,
-                request.evidenciaUrl()
+                request.evidenciaUrl(),
+                request.comentarioEstudiante()
         );
     }
 
@@ -99,11 +106,13 @@ public class TareaController {
     )
     public Tarea subirFotografia(
             @PathVariable Long id,
-            @RequestParam("archivo") MultipartFile archivo) {
+            @RequestParam("archivo") MultipartFile archivo,
+            @RequestParam(value = "comentario", required = false) String justificacion) {
 
         return service.entregarEvidenciaArchivo(
                 id,
-                archivo
+                archivo,
+                justificacion
         );
     }
 

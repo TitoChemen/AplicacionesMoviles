@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -38,17 +39,15 @@ fun EvidenciaScreen(
     val context = LocalContext.current
 
     // Imagen seleccionada o capturada
-    var evidenciaUri by remember {
-        mutableStateOf<Uri?>(null)
-    }
+    var evidenciaUriTexto by rememberSaveable(tareaId) { mutableStateOf<String?>(null) }
+    val evidenciaUri = evidenciaUriTexto?.let(Uri::parse)
 
-    // URI temporal para la cámara
-    var uriTemporalParaCamara by remember {
-        mutableStateOf<Uri?>(null)
-    }
+    // URI temporal de camara restaurable tras giro
+    var uriTemporalCamaraTexto by rememberSaveable(tareaId) { mutableStateOf<String?>(null) }
+    val uriTemporalParaCamara = uriTemporalCamaraTexto?.let(Uri::parse)
 
     // Comentario del estudiante
-    var comentario by remember {
+    var comentario by rememberSaveable(tareaId) {
         mutableStateOf("")
     }
 
@@ -66,7 +65,7 @@ fun EvidenciaScreen(
     ) { exito ->
 
         if (exito) {
-            evidenciaUri = uriTemporalParaCamara
+            evidenciaUriTexto = uriTemporalCamaraTexto
         } else {
             Toast.makeText(
                 context,
@@ -86,12 +85,12 @@ fun EvidenciaScreen(
 
         uriSeleccionada?.let { uri ->
 
-            evidenciaUri = copiarImagenAAlmacenamientoInterno(
+            evidenciaUriTexto = copiarImagenAAlmacenamientoInterno(
                 context = context,
                 uri = uri
-            )
+            )?.toString()
 
-            if (evidenciaUri == null) {
+            if (evidenciaUriTexto == null) {
                 Toast.makeText(
                     context,
                     "No se pudo cargar la imagen",
@@ -137,8 +136,9 @@ fun EvidenciaScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
+                .imePadding()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -216,12 +216,9 @@ fun EvidenciaScreen(
                     onClick = {
 
                         try {
-                            uriTemporalParaCamara =
-                                crearUriDeArchivo(context)
-
-                            uriTemporalParaCamara?.let { uri ->
-                                cameraLauncher.launch(uri)
-                            }
+                            val nuevaUri = crearUriDeArchivo(context)
+                            uriTemporalCamaraTexto = nuevaUri.toString()
+                            cameraLauncher.launch(nuevaUri)
 
                         } catch (e: Exception) {
                             Toast.makeText(
@@ -253,16 +250,17 @@ fun EvidenciaScreen(
                     comentario = it
                 },
                 label = {
-                    Text("Comentario de la tarea (opcional)")
+                    Text("Justificación de tu evidencia (opcional)")
                 },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !guardando,
                 minLines = 3,
-                maxLines = 5
+                maxLines = 5,
+                supportingText = { Text("Explica qué hiciste y qué muestra la fotografía.") }
             )
 
             Text(
-                text = "Tu fotografía será enviada al administrador para su revisión.",
+                text = "Tu foto y justificación serán guardadas para que las revise tu docente.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

@@ -2,9 +2,12 @@
 package cl.duoc.huertaescolar.data.remote
 
 import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
+import retrofit2.http.PUT
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.Multipart
@@ -18,6 +21,31 @@ import retrofit2.http.Streaming
 
 
 interface TareaApi {
+    @GET("api/tareas/{id}/historial")
+    suspend fun historial(
+        @Header("Authorization") token: String,
+        @Path("id") tareaId: Long
+    ): List<HistorialTareaDto>
+
+    @POST("api/tareas")
+    suspend fun crear(
+        @Header("Authorization") token: String,
+        @Body tarea: TareaRequestDto
+    ): TareaResponseDto
+
+    @PUT("api/tareas/{id}")
+    suspend fun actualizar(
+        @Header("Authorization") token: String,
+        @Path("id") tareaId: Long,
+        @Body tarea: TareaRequestDto
+    ): TareaResponseDto
+
+    @DELETE("api/tareas/{id}")
+    suspend fun eliminar(
+        @Header("Authorization") token: String,
+        @Path("id") tareaId: Long
+    )
+
 
     // Obtener todas las tareas
     @GET("api/tareas")
@@ -38,7 +66,8 @@ interface TareaApi {
     suspend fun subirEvidenciaArchivo(
         @Header("Authorization") token: String,
         @Path("id") tareaId: Long,
-        @Part archivo: MultipartBody.Part
+        @Part archivo: MultipartBody.Part,
+        @Part("comentario") justificacion: RequestBody
     ): TareaResponseDto
 
 

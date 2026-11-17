@@ -26,6 +26,9 @@ public class Tarea {
 
     private Long estudianteId;
 
+    @Column(name = "curso_id")
+    private Long cursoId;
+
     private String fechaAsignacion;
 
     private String fechaVencimiento;
@@ -39,4 +42,10 @@ public class Tarea {
 
     @Column(length = 1000)
     private String observacionDocente;
+
+    @Column(length = 1000)
+    private String comentarioEstudiante;
+
+    @Column(name = "intento_actual", nullable = false)
+    private int intentoActual = 0;
 }

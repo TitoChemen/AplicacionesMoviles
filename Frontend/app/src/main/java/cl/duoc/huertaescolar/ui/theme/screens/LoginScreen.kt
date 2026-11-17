@@ -1,6 +1,9 @@
 package cl.duoc.huertaescolar.ui.theme.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,12 +18,14 @@ fun LoginScreen(
     onLogin: (String, String) -> Unit, // 🔑 Ahora recibe (identificador, contraseña)
     onEditar: () -> Unit
 ) {
-    var identificador by remember { mutableStateOf("") }
-    var contrasena by remember { mutableStateOf("") } // 🔒 NUEVO: Estado para la contraseña
+    var identificador by rememberSaveable { mutableStateOf("") }
+    var contrasena by rememberSaveable { mutableStateOf("") } // 🔒 NUEVO: Estado para la contraseña
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .imePadding()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
@@ -39,7 +44,7 @@ fun LoginScreen(
                 identificador = it
                 onEditar()
             },
-            label = { Text("Identificador de usuario") },
+            label = { Text("Correo electrónico") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
@@ -81,7 +86,7 @@ fun LoginScreen(
 
         Spacer(Modifier.height(24.dp))
         Text(
-            text = "Prueba con:\nadmin1 / admin123 (Administrador)\nestudiante1 / alumno123 (Estudiante)",
+            text = "Inicia sesión con tu correo del curso. Las credenciales de prueba están en el README del backend.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline,
             textAlign = TextAlign.Center

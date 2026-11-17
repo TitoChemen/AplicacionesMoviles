@@ -1,6 +1,9 @@
 package cl.duoc.huertaescolar.ui.theme.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
@@ -15,16 +18,31 @@ import cl.duoc.huertaescolar.viewmodel.TareaViewModel
 @Composable
 fun CrearTareaScreen(
     navController: NavController,
-    viewModel: TareaViewModel
+    viewModel: TareaViewModel,
+    accessToken: String?
 ) {
     val estudiantes by viewModel.estudiantesDisponibles.collectAsState()
+    val sectores by viewModel.sectoresDisponibles.collectAsState()
+    val cursosEstudiantes by viewModel.cursoIdPorEstudiante.collectAsState()
+    val cursoDelAlumno = viewModel.responsableIdSeleccionado?.toLongOrNull()?.let {
+        cursosEstudiantes[it]
+    }
+    val sectoresCompatibles = if (cursoDelAlumno == null) sectores else sectores.filter {
+        it.cursoId == cursoDelAlumno
+    }
+    var expandedSector by remember { mutableStateOf(false) }
+    val nombreSectorSeleccionado = sectoresCompatibles.firstOrNull {
+        it.id == viewModel.sectorIdSeleccionado
+    }?.nombre.orEmpty()
     var expandedDropdown by remember { mutableStateOf(false) }
-    var nombreEstudianteSeleccionado by remember { mutableStateOf("") }
-    var mensajeExito by remember { mutableStateOf("") }
+    val nombreEstudianteSeleccionado = estudiantes.firstOrNull {
+        it.backendId?.toString() == viewModel.responsableIdSeleccionado
+    }?.nombreFicticio.orEmpty()
+    var mensajeExito by rememberSaveable { mutableStateOf("") }
 
     // Cargamos los estudiantes apenas se abre la pantalla
-    LaunchedEffect(Unit) {
-        viewModel.cargarEstudiantes()
+    LaunchedEffect(accessToken) {
+        viewModel.cargarEstudiantes(accessToken)
     }
 
     Scaffold(
@@ -47,6 +65,8 @@ fun CrearTareaScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .imePadding()
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -83,14 +103,50 @@ fun CrearTareaScreen(
                                 DropdownMenuItem(
                                     text = { Text(estudiante.nombreFicticio) },
                                     onClick = {
-                                        viewModel.responsableIdSeleccionado = estudiante.identificador
-                                        nombreEstudianteSeleccionado = estudiante.nombreFicticio
-                                        expandedDropdown = false
+                                        viewModel.responsableIdSeleccionado = estudiante.backendId?.toString()
+                                        val cursoElegido = cursosEstudiantes[estudiante.backendId]
+                                        if (cursoElegido != null && sectores.none {
+                                                it.id == viewModel.sectorIdSeleccionado && it.cursoId == cursoElegido
+                                            }) {
+                                            viewModel.sectorIdSeleccionado = null
+                                        }
+                                         expandedDropdown = false
                                         viewModel.errorResponsable = null
                                     }
                                 )
                             }
                         }
+                    }
+
+                    ExposedDropdownMenuBox(
+                        expanded = expandedSector,
+                        onExpandedChange = { expandedSector = !expandedSector }
+                    ) {
+                        OutlinedTextField(
+                            value = nombreSectorSeleccionado.ifBlank { "Selecciona sector del curso..." },
+                            onValueChange = {}, readOnly = true,
+                            label = { Text("Sector del curso *") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedSector) },
+                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = expandedSector,
+                            onDismissRequest = { expandedSector = false }
+                        ) {
+                            sectoresCompatibles.forEach { sector ->
+                                DropdownMenuItem(
+                                    text = { Text(sector.nombre) },
+                                    onClick = {
+                                        viewModel.sectorIdSeleccionado = sector.id
+                                         expandedSector = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    viewModel.errorCreacion?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error)
                     }
 
                     // 2. Tipo de Tarea
@@ -132,10 +188,9 @@ fun CrearTareaScreen(
 
                     Button(
                         onClick = {
-                            viewModel.crearTarea {
+                            viewModel.crearTarea(accessToken) {
                                 mensajeExito = "¡Tarea asignada correctamente!"
-                                nombreEstudianteSeleccionado = "" // Reiniciar la vista
-                            }
+                             }
                         },
                         modifier = Modifier.align(Alignment.End)
                     ) {

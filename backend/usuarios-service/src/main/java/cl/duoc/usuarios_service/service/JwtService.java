@@ -36,7 +36,14 @@ public class JwtService {
                         expirationMinutes, ChronoUnit.MINUTES))
                 .subject(usuario.getId().toString())
                 .claim("rol", usuario.getRol().name())
+                // Evita que un JWT viejo de un antiguo docente ADMINISTRADOR
+                // se interprete accidentalmente como administrador global.
+                .claim("adminGlobal", usuario.getRol() == cl.duoc.usuarios_service.entity.Rol.ADMINISTRADOR
+                        && usuario.getCursoId() == null)
                 .claim("correo", usuario.getCorreo())
+                // Curso firmado en JWT; nunca aceptar un curso enviado por el cliente.
+                .claim("cursoId", usuario.getCursoId() == null
+                        ? "" : usuario.getCursoId().toString())
                 .build();
 
         JwsHeader header = JwsHeader.with(

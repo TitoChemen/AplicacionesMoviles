@@ -26,6 +26,7 @@ import kotlinx.coroutines.withContext
 
 import android.util.Log
 import cl.duoc.huertaescolar.data.remote.RetrofitClient
+import cl.duoc.huertaescolar.data.remote.HistorialTareaDto
 import cl.duoc.huertaescolar.data.remote.aTareaLocal
 import retrofit2.HttpException
 import java.io.IOException
@@ -33,6 +34,7 @@ import java.io.IOException
 import android.net.Uri
 import android.webkit.MimeTypeMap
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import java.io.File
@@ -78,6 +80,42 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
     // independientemente del filtro seleccionado
     val tareasSinFiltrar: StateFlow<List<Tarea>> =
         _tareasBase.asStateFlow()
+
+    // Las tareas del administrador global conservan su curso real para identificarlo.
+    private val _intentosPorTarea = MutableStateFlow<Map<Int, Int>>(emptyMap())
+    val intentosPorTarea = _intentosPorTarea.asStateFlow()
+
+    private val _historialTarea = MutableStateFlow<List<HistorialTareaDto>>(emptyList())
+    val historialTarea = _historialTarea.asStateFlow()
+    var errorHistorial by mutableStateOf<String?>(null)
+        private set
+    var cargandoHistorial by mutableStateOf(false)
+        private set
+
+    fun cargarHistorial(tareaId: Int, token: String?) {
+        _historialTarea.value = emptyList()
+        errorHistorial = null
+        if (token.isNullOrBlank()) {
+            errorHistorial = "Inicia sesión para ver el historial"
+            return
+        }
+        viewModelScope.launch {
+            cargandoHistorial = true
+            try {
+                _historialTarea.value = RetrofitClient.tareaApi.historial(
+                    "Bearer $token", tareaId.toLong())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                errorHistorial = "No se pudo cargar el historial: ${e.message}"
+            } finally {
+                cargandoHistorial = false
+            }
+        }
+    }
+
+    private val _cursoPorTarea = MutableStateFlow<Map<Int, String>>(emptyMap())
+    val cursoPorTarea: StateFlow<Map<Int, String>> = _cursoPorTarea.asStateFlow()
 
     // Lista utilizada por ListaTareasScreen
     val tareasFiltradas: StateFlow<List<Tarea>> =
@@ -129,6 +167,13 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
 
         if (usuarioActivo == null || accessToken.isNullOrBlank()) {
             _tareasBase.value = emptyList()
+            _cursoPorTarea.value = emptyMap()
+            _intentosPorTarea.value = emptyMap()
+            _historialTarea.value = emptyList()
+            _estudiantesDisponibles.value = emptyList()
+            _sectoresDisponibles.value = emptyList()
+            _cursoIdPorEstudiante.value = emptyMap()
+            limpiarFormularioTarea()
             return
         }
 
@@ -137,7 +182,7 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
                 val token = "Bearer $accessToken"
 
                 val tareasRemotas =
-                    if (usuarioActivo.perfil == Perfil.ADMINISTRADOR) {
+                    if (Perfil.esPersonal(usuarioActivo.perfil)) {
                         RetrofitClient.tareaApi.listar(token)
                     } else {
                         val estudianteId = usuarioActivo.backendId
@@ -157,10 +202,27 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     }
 
-                val tareasConvertidas = tareasRemotas.map {
-                    it.aTareaLocal()
+                val tareasConvertidas = tareasRemotas.map { it.aTareaLocal() }
+                _intentosPorTarea.value = tareasRemotas.associate { t ->
+                    t.id.toInt() to t.intentoActual
                 }
 
+                // Obtiene códigos legibles 7-A/7-B para el administrador global.
+                if (usuarioActivo.perfil == Perfil.ADMINISTRADOR) {
+                    val usuarios = runCatching { RetrofitClient.usuarioApi.listar(token) }
+                        .getOrElse { emptyList() }
+                    val cursos = usuarios.mapNotNull { u ->
+                        u.cursoId?.let { it to (u.cursoCodigo ?: "Curso #$it") }
+                    }.toMap()
+                    _cursoPorTarea.value = tareasRemotas.associate { t ->
+                        t.id.toInt() to (t.cursoId?.let { cursos[it] ?: "Curso #$it" }
+                            ?: "Sin curso")
+                    }
+                } else {
+                    _cursoPorTarea.value = tareasRemotas.associate { t ->
+                        t.id.toInt() to usuarioActivo.tallerAsignado
+                    }
+                }
                 _tareasBase.value = tareasConvertidas
 
                 Log.d(
@@ -229,82 +291,100 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
     val estudiantesDisponibles: StateFlow<List<Usuario>> =
         _estudiantesDisponibles.asStateFlow()
 
-    fun cargarEstudiantes() {
+    private val _cursoIdPorEstudiante = MutableStateFlow<Map<Long, Long?>>(emptyMap())
+    val cursoIdPorEstudiante: StateFlow<Map<Long, Long?>> = _cursoIdPorEstudiante.asStateFlow()
 
+    // Estudiantes y sectores del MISMO curso, filtrados en el backend.
+    private val _sectoresDisponibles =
+        MutableStateFlow<List<cl.duoc.huertaescolar.data.remote.SectorResponseDto>>(emptyList())
+    val sectoresDisponibles = _sectoresDisponibles.asStateFlow()
+    var sectorIdSeleccionado by mutableStateOf<Long?>(null)
+    var tareaIdEdicion by mutableStateOf<Int?>(null)
+    var errorCreacion by mutableStateOf<String?>(null)
+
+    fun cargarEstudiantes(accessToken: String?) {
+        if (accessToken.isNullOrBlank()) {
+            _estudiantesDisponibles.value = emptyList()
+            _sectoresDisponibles.value = emptyList()
+            _cursoIdPorEstudiante.value = emptyMap()
+            return
+        }
         viewModelScope.launch {
-
-            val todosLosUsuarios = withContext(Dispatchers.IO) {
-                repository.obtenerUsuarios()
+            try {
+                val token = "Bearer $accessToken"
+                val usuarios = RetrofitClient.usuarioApi.listar(token)
+                    .filter { it.rol == Perfil.ESTUDIANTE && it.activo }
+                _cursoIdPorEstudiante.value = usuarios.associate { it.id to it.cursoId }
+                _estudiantesDisponibles.value = usuarios.map {
+                        Usuario(
+                            identificador = it.correo,
+                            nombreFicticio = it.nombre,
+                            perfil = it.rol,
+                            tallerAsignado = it.cursoCodigo.orEmpty(),
+                            estadoCuenta = "ACTIVA", contrasena = "",
+                            backendId = it.id
+                        )
+                    }
+                _sectoresDisponibles.value = RetrofitClient.sectorApi.listar(token)
+                    .filter { it.estado == "ACTIVO" }
+            } catch (e: Exception) {
+                Log.e("TareaViewModel", "No se pudieron cargar usuarios/sectores", e)
+                _estudiantesDisponibles.value = emptyList()
+                _sectoresDisponibles.value = emptyList()
+                _cursoIdPorEstudiante.value = emptyMap()
+                errorCreacion = "No se pudieron consultar los datos del curso"
             }
-
-            _estudiantesDisponibles.value =
-                todosLosUsuarios.filter { usuario ->
-                    usuario.perfil == Perfil.ESTUDIANTE &&
-                            usuario.estadoCuenta == "ACTIVA"
-                }
         }
     }
 
     // =========================================================
-    // CREAR TAREA
+    // CREAR/EDITAR TAREA EN SPRING BOOT, NO EN ROOM
     // =========================================================
-
-    fun crearTarea(onSuccess: () -> Unit) {
-
+    fun crearTarea(
+        accessToken: String?,
+        onSuccess: () -> Unit
+    ) {
+        errorCreacion = null
         errorDescripcionTarea = null
         errorTipoTarea = null
         errorFechaTarea = null
         errorResponsable = null
 
-        var formularioValido = true
-
-        if (descripcionTarea.isBlank()) {
-            errorDescripcionTarea =
-                "La descripción es obligatoria."
-            formularioValido = false
-        }
-
-        if (tipoTarea.isBlank()) {
-            errorTipoTarea =
-                "Debe indicar el tipo (ej. Riego, Siembra)."
-            formularioValido = false
-        }
-
-        if (fechaProgramada.isBlank()) {
-            errorFechaTarea =
-                "La fecha programada es obligatoria."
-            formularioValido = false
-        }
-
-        if (responsableIdSeleccionado == null) {
-            errorResponsable =
-                "Debe asignar un responsable a la tarea."
-            formularioValido = false
-        }
-
-        if (!formularioValido) return
+        if (accessToken.isNullOrBlank()) { errorCreacion = "Inicia sesión primero"; return }
+        if (descripcionTarea.isBlank()) { errorDescripcionTarea = "Descripción obligatoria"; return }
+        if (tipoTarea.isBlank()) { errorTipoTarea = "Título obligatorio"; return }
+        if (fechaProgramada.isBlank()) { errorFechaTarea = "Fecha obligatoria"; return }
+        val estudianteId = responsableIdSeleccionado?.toLongOrNull()
+        if (estudianteId == null) { errorResponsable = "Selecciona un estudiante"; return }
+        val sectorId = sectorIdSeleccionado
+        if (sectorId == null) { errorCreacion = "Selecciona un sector"; return }
 
         viewModelScope.launch {
-
-            val nuevaTarea = Tarea(
-                tipo = tipoTarea,
-                descripcion = descripcionTarea,
-                sectorId = 1,
-                cultivoId = null,
-                fechaProgramada = fechaProgramada,
-                asignadoA = responsableIdSeleccionado ?: "",
-                estado = EstadoTarea.PENDIENTE,
-                comentarioEstudiante = null,
-                comentarioDocente = null,
-                rutaFotografia = null
-            )
-
-            withContext(Dispatchers.IO) {
-                repository.insertarTarea(nuevaTarea)
+            try {
+                val request = cl.duoc.huertaescolar.data.remote.TareaRequestDto(
+                    sectorId = sectorId, titulo = tipoTarea.trim(),
+                    descripcion = descripcionTarea.trim(), estudianteId = estudianteId,
+                    fechaAsignacion = java.time.LocalDate.now().toString(),
+                    fechaVencimiento = fechaProgramada.trim()
+                )
+                val token = "Bearer $accessToken"
+                val resultado = if (tareaIdEdicion != null) {
+                    RetrofitClient.tareaApi.actualizar(token, tareaIdEdicion!!.toLong(), request)
+                } else {
+                    RetrofitClient.tareaApi.crear(token, request)
+                }
+                _tareasBase.value = _tareasBase.value
+                    .filterNot { it.id == resultado.id.toInt() } + resultado.aTareaLocal()
+                _intentosPorTarea.value = _intentosPorTarea.value +
+                    (resultado.id.toInt() to resultado.intentoActual)
+                limpiarFormularioTarea()
+                onSuccess()
+            } catch (e: HttpException) {
+                errorCreacion = if (e.code() == 403) "No puedes asignar tareas fuera de tu curso"
+                    else "Error al guardar tarea: HTTP ${e.code()}"
+            } catch (e: Exception) {
+                errorCreacion = "No se pudo guardar la tarea: ${e.message}"
             }
-
-            limpiarFormularioTarea()
-            onSuccess()
         }
     }
 
@@ -312,10 +392,16 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
     // ELIMINAR TAREA
     // =========================================================
 
-    fun eliminarTarea(tarea: Tarea) {
-
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.eliminarTarea(tarea)
+    fun eliminarTarea(tarea: Tarea, accessToken: String?) {
+        if (accessToken.isNullOrBlank()) return
+        viewModelScope.launch {
+            try {
+                RetrofitClient.tareaApi.eliminar("Bearer $accessToken", tarea.id.toLong())
+                _tareasBase.value = _tareasBase.value.filterNot { it.id == tarea.id }
+                _intentosPorTarea.value = _intentosPorTarea.value - tarea.id
+            } catch (e: Exception) {
+                Log.e("TareaViewModel", "No se pudo eliminar la tarea", e)
+            }
         }
     }
 
@@ -329,6 +415,9 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
         tipoTarea = ""
         fechaProgramada = ""
         responsableIdSeleccionado = null
+        sectorIdSeleccionado = null
+        tareaIdEdicion = null
+        errorCreacion = null
 
         errorDescripcionTarea = null
         errorTipoTarea = null
@@ -365,6 +454,8 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
         tipoTarea = tarea.tipo
         fechaProgramada = tarea.fechaProgramada
         responsableIdSeleccionado = tarea.asignadoA
+        sectorIdSeleccionado = tarea.sectorId.toLong()
+        tareaIdEdicion = tarea.id
     }
 
     // =========================================================
@@ -521,18 +612,21 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
                     RetrofitClient.tareaApi.subirEvidenciaArchivo(
                         token = "Bearer $accessToken",
                         tareaId = tareaId.toLong(),
-                        archivo = multipart
+                        archivo = multipart,
+                        justificacion = comentario.orEmpty().trim()
+                            .toRequestBody("text/plain".toMediaType())
                     )
 
                 _tareasBase.value = _tareasBase.value.map { tarea ->
                     if (tarea.id == tareaId) {
-                        tareaActualizada.aTareaLocal().copy(
-                            comentarioEstudiante = comentario
-                        )
+                        tareaActualizada.aTareaLocal()
                     } else {
                         tarea
                     }
                 }
+
+                _intentosPorTarea.value = _intentosPorTarea.value +
+                    (tareaId to tareaActualizada.intentoActual)
 
                 Log.d(
                     "TareaViewModel",

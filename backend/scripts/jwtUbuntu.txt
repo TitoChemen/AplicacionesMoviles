@@ -1,0 +1,14 @@
+openssl rand -base64 64 | tr -d '\n'; echo
+
+export JWT_SECRET="$(openssl rand -base64 64 | tr -d '\n')"
+echo "$JWT_SECRET"
+
+
+usuarios-service
+
+DB_PASSWORD=Huerta2026!;PLAINTEXT_DEV=true;JWT_SECRET=TU_CLAVE_JWT
+
+
+cualquier otro microservicio q no sea usuarios (exceptuando api gateway)
+
+DB_PASSWORD=Huerta2026!;JWT_SECRET=TU_CLAVE_JWT

@@ -4,6 +4,7 @@ package cl.duoc.tareas_service.service;
 import cl.duoc.tareas_service.entity.*;
 import cl.duoc.tareas_service.exception.*;
 import cl.duoc.tareas_service.repository.*;
+import cl.duoc.tareas_service.security.CursoActual;
 
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
@@ -24,74 +25,39 @@ public class TareaService {
     private final TareaRepository repository;
     private final ReferenciaService referenciaService;
     private final ArchivoService archivoService;
+    private final CursoActual acceso;
+    private final HistorialTareaRepository historialRepository;
 
     public TareaService(
             TareaRepository repository,
             ReferenciaService referenciaService,
-            ArchivoService archivoService) {
+            ArchivoService archivoService, CursoActual acceso, HistorialTareaRepository historialRepository) {
 
         this.repository = repository;
         this.referenciaService = referenciaService;
         this.archivoService = archivoService;
+        this.acceso = acceso;
+        this.historialRepository = historialRepository;
     }
 
-    // ==========================================
-    // SEGURIDAD Y AUTENTICACION
-    // ==========================================
-
-    private boolean esAdministrador() {
-
-        Authentication auth = SecurityContextHolder
-                .getContext().getAuthentication();
-
-        return auth != null
-                && auth.getAuthorities().stream()
-                .anyMatch(a ->
-                        a.getAuthority().equals(
-                                "ROLE_ADMINISTRADOR"));
-    }
-
-    private Long usuarioActualId() {
-
-        Authentication auth = SecurityContextHolder
-                .getContext().getAuthentication();
-
-        if (!(auth instanceof JwtAuthenticationToken jwtAuth)) {
-            throw new AccessDeniedException(
-                    "No existe un JWT autenticado");
-        }
-
-        try {
-            return Long.valueOf(
-                    jwtAuth.getToken().getSubject());
-
-        } catch (NumberFormatException ex) {
-            throw new AccessDeniedException(
-                    "El JWT no contiene un ID valido");
-        }
-    }
+    // Reglas de acceso: ni el docente ni el alumno pueden salir de su curso.
+    private boolean esAdministrador() { return acceso.esDocente(); }
+    private Long usuarioActualId() { return acceso.usuarioId(); }
+    private void exigirAdministrador() { acceso.exigirDocente(); }
 
     private void verificarPropietario(Tarea tarea) {
-
-        if (esAdministrador()) {
-            return;
-        }
-
-        Long usuarioId = usuarioActualId();
-
-        if (tarea.getEstudianteId() == null
-                || !tarea.getEstudianteId().equals(usuarioId)) {
-
-            throw new AccessDeniedException(
-                    "No tienes permiso para acceder a esta tarea");
+        acceso.exigirCurso(tarea.getCursoId());
+        if (!esAdministrador() &&
+                (tarea.getEstudianteId() == null ||
+                 !tarea.getEstudianteId().equals(usuarioActualId()))) {
+            throw new AccessDeniedException("No tienes acceso a esta tarea");
         }
     }
 
-    private void exigirAdministrador() {
-
-        if (!esAdministrador()) {
-            throw new AccessDeniedException(
-                    "Solo un administrador puede realizar esta operacion");
+    private void exigirEstudianteAsignado(Tarea tarea) {
+        if (esAdministrador() || tarea.getEstudianteId() == null ||
+                !tarea.getEstudianteId().equals(usuarioActualId())) {
+            throw new AccessDeniedException("Solo el estudiante asignado puede entregar evidencia");
         }
     }
 
@@ -102,12 +68,13 @@ public class TareaService {
     @Transactional(readOnly = true)
     public List<Tarea> listar() {
 
+        if (acceso.esAdminGlobal()) return repository.findAll();
         if (esAdministrador()) {
-            return repository.findAll();
+            return repository.findByCursoId(acceso.id());
         }
 
-        return repository.findByEstudianteId(
-                usuarioActualId());
+        return repository.findByCursoIdAndEstudianteId(
+                acceso.id(), usuarioActualId());
     }
 
     @Transactional(readOnly = true)
@@ -126,17 +93,15 @@ public class TareaService {
     @Transactional(readOnly = true)
     public List<Tarea> porSector(Long sectorId) {
 
+        if (acceso.esAdminGlobal()) return repository.findBySectorId(sectorId);
         if (esAdministrador()) {
-            return repository.findBySectorId(sectorId);
+            return repository.findByCursoIdAndSectorId(acceso.id(), sectorId);
         }
 
         Long usuarioId = usuarioActualId();
 
-        return repository.findBySectorId(sectorId)
-                .stream()
-                .filter(t ->
-                        usuarioId.equals(t.getEstudianteId()))
-                .toList();
+        return repository.findByCursoIdAndSectorId(acceso.id(), sectorId)
+                .stream().filter(t -> usuarioId.equals(t.getEstudianteId())).toList();
     }
 
     @Transactional(readOnly = true)
@@ -149,23 +114,22 @@ public class TareaService {
                     "No puedes consultar tareas de otro estudiante");
         }
 
-        return repository.findByEstudianteId(estudianteId);
+        if (acceso.esAdminGlobal()) return repository.findByEstudianteId(estudianteId);
+        return repository.findByCursoIdAndEstudianteId(acceso.id(), estudianteId);
     }
 
     @Transactional(readOnly = true)
     public List<Tarea> porEstado(EstadoTarea estado) {
 
+        if (acceso.esAdminGlobal()) return repository.findByEstado(estado);
         if (esAdministrador()) {
-            return repository.findByEstado(estado);
+            return repository.findByCursoIdAndEstado(acceso.id(), estado);
         }
 
         Long usuarioId = usuarioActualId();
 
-        return repository.findByEstado(estado)
-                .stream()
-                .filter(t ->
-                        usuarioId.equals(t.getEstudianteId()))
-                .toList();
+        return repository.findByCursoIdAndEstado(acceso.id(), estado)
+                .stream().filter(t -> usuarioId.equals(t.getEstudianteId())).toList();
     }
 
     // ==========================================
@@ -178,16 +142,20 @@ public class TareaService {
         exigirAdministrador();
         validar(tarea);
 
-        referenciaService.validarSector(
-                tarea.getSectorId());
-
-        referenciaService.validarEstudiante(
-                tarea.getEstudianteId());
-
+        Long cursoSector = referenciaService.validarSector(tarea.getSectorId());
+        Long cursoAlumno = referenciaService.validarEstudiante(tarea.getEstudianteId());
+        if (!cursoSector.equals(cursoAlumno)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El estudiante y el sector deben pertenecer al mismo curso");
+        }
         tarea.setId(null);
+        // Curso obtenido de las referencias validadas, NUNCA del body.
+        tarea.setCursoId(cursoSector);
         tarea.setEstado(EstadoTarea.PENDIENTE);
         tarea.setEvidenciaUrl(null);
         tarea.setObservacionDocente(null);
+        tarea.setComentarioEstudiante(null);
+        tarea.setIntentoActual(0);
 
         return repository.save(tarea);
     }
@@ -202,14 +170,20 @@ public class TareaService {
         exigirAdministrador();
 
         Tarea actual = buscar(id);
+        if (historialRepository.existsByTareaId(id) ||
+                (actual.getEvidenciaUrl() != null && !actual.getEvidenciaUrl().isBlank())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Esta tarea ya tiene evidencia o historial; crea otra en vez de modificarla");
+        }
         validar(datos);
 
-        referenciaService.validarSector(
-                datos.getSectorId());
-
-        referenciaService.validarEstudiante(
-                datos.getEstudianteId());
-
+        Long cursoSector = referenciaService.validarSector(datos.getSectorId());
+        Long cursoAlumno = referenciaService.validarEstudiante(datos.getEstudianteId());
+        if (!cursoSector.equals(cursoAlumno)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El estudiante y el sector deben pertenecer al mismo curso");
+        }
+        actual.setCursoId(cursoSector);
         actual.setSectorId(datos.getSectorId());
         actual.setTitulo(datos.getTitulo());
         actual.setDescripcion(datos.getDescripcion());
@@ -228,6 +202,7 @@ public class TareaService {
     public Tarea iniciar(Long id) {
 
         Tarea tarea = buscar(id);
+        exigirEstudianteAsignado(tarea);
 
         if (tarea.getEstado() != EstadoTarea.PENDIENTE) {
             throw new IllegalArgumentException(
@@ -261,9 +236,10 @@ public class TareaService {
     // ==========================================
 
     @Transactional
-    public Tarea entregarEvidencia(Long id, String url) {
+    public Tarea entregarEvidencia(Long id, String url, String justificacion) {
 
         Tarea tarea = buscar(id);
+        exigirEstudianteAsignado(tarea);
 
         if (url == null || url.isBlank()) {
             throw new IllegalArgumentException(
@@ -273,10 +249,13 @@ public class TareaService {
         comprobarEntregaPermitida(tarea);
 
         tarea.setEvidenciaUrl(url);
+        tarea.setComentarioEstudiante(normalizarJustificacion(justificacion));
         tarea.setObservacionDocente(null);
         tarea.setEstado(EstadoTarea.PENDIENTE_VALIDACION);
-
-        return repository.save(tarea);
+        tarea.setIntentoActual(tarea.getIntentoActual() + 1);
+        Tarea guardada = repository.save(tarea);
+        registrarEvento(guardada, "ENTREGA", guardada.getComentarioEstudiante());
+        return guardada;
     }
 
     // ==========================================
@@ -286,9 +265,11 @@ public class TareaService {
     @Transactional
     public Tarea entregarEvidenciaArchivo(
             Long id,
-            MultipartFile archivo) {
+            MultipartFile archivo,
+            String justificacion) {
 
         Tarea tarea = buscar(id);
+        exigirEstudianteAsignado(tarea);
 
         // Primero comprobar permisos y estado.
         comprobarEntregaPermitida(tarea);
@@ -302,6 +283,7 @@ public class TareaService {
                             + "/evidencias/archivo"
             );
 
+            tarea.setComentarioEstudiante(normalizarJustificacion(justificacion));
             tarea.setObservacionDocente(null);
             tarea.setEstado(
                     EstadoTarea.PENDIENTE_VALIDACION
@@ -317,12 +299,24 @@ public class TareaService {
                             + nombre
             );
 
-            return repository.saveAndFlush(guardada);
+            guardada.setIntentoActual(guardada.getIntentoActual() + 1);
+            Tarea finalizada = repository.saveAndFlush(guardada);
+            registrarEvento(finalizada, "ENTREGA", finalizada.getComentarioEstudiante());
+            return finalizada;
 
         } catch (RuntimeException e) {
             archivoService.eliminar(nombre);
             throw e;
         }
+    }
+
+    private String normalizarJustificacion(String texto) {
+        String valor = texto == null ? "" : texto.trim();
+        if (valor.length() > 1000) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La justificacion no puede superar los 1000 caracteres");
+        }
+        return valor.isEmpty() ? null : valor;
     }
 
     // ==========================================
@@ -341,7 +335,8 @@ public class TareaService {
                         + "/evidencias/archivo?nombre="
                         + nombre;
 
-        if (!rutaEsperada.equals(tarea.getEvidenciaUrl())) {
+        if (!rutaEsperada.equals(tarea.getEvidenciaUrl()) &&
+                !historialRepository.existsByTareaIdAndEvidenciaUrl(id, rutaEsperada)) {
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND,
                     "La evidencia no corresponde a esta tarea"
@@ -378,9 +373,34 @@ public class TareaService {
                         : EstadoTarea.RECHAZADA
         );
 
-        tarea.setObservacionDocente(observacion);
+        String comentario = normalizarJustificacion(observacion);
+        if (!aprobada && comentario == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Debes explicar el motivo del rechazo");
+        }
+        tarea.setObservacionDocente(comentario);
+        Tarea guardada = repository.save(tarea);
+        registrarEvento(guardada, aprobada ? "APROBACION" : "RECHAZO", comentario);
+        return guardada;
+    }
 
-        return repository.save(tarea);
+    // Historial de la tarea autorizado por buscar(id): propietario o personal de su curso.
+    @Transactional(readOnly = true)
+    public List<HistorialTarea> historial(Long id) {
+        buscar(id);
+        return historialRepository.findByTareaIdOrderByFechaAscIdAsc(id);
+    }
+
+    private void registrarEvento(Tarea tarea, String accion, String comentario) {
+        HistorialTarea evento = new HistorialTarea();
+        evento.setTareaId(tarea.getId());
+        evento.setIntento(tarea.getIntentoActual());
+        evento.setAccion(accion);
+        evento.setActorId(acceso.usuarioId());
+        evento.setComentario(comentario);
+        evento.setEvidenciaUrl(tarea.getEvidenciaUrl());
+        evento.setFecha(java.time.LocalDateTime.now(java.time.Clock.systemUTC()));
+        historialRepository.save(evento);
     }
 
     // ==========================================
@@ -394,6 +414,11 @@ public class TareaService {
 
         Tarea tarea = buscar(id);
 
+        if (historialRepository.existsByTareaId(id) ||
+                (tarea.getEvidenciaUrl() != null && !tarea.getEvidenciaUrl().isBlank())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "No se puede borrar una tarea con evidencia o historial: conservar trazabilidad");
+        }
         repository.delete(tarea);
     }
 

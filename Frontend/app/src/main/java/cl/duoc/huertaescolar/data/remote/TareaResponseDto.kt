@@ -13,7 +13,10 @@ data class TareaResponseDto(
     val fechaAsignacion: String?,
     val fechaVencimiento: String?,
     val evidenciaUrl: String?,
-    val observacionDocente: String?
+    val observacionDocente: String?,
+    val comentarioEstudiante: String? = null,
+    val cursoId: Long? = null,
+    val intentoActual: Int = 0
 )
 
 fun TareaResponseDto.aTareaLocal(): Tarea {
@@ -28,7 +31,7 @@ fun TareaResponseDto.aTareaLocal(): Tarea {
             ?: "Sin fecha",
         asignadoA = estudianteId?.toString().orEmpty(),
         estado = estado,
-        comentarioEstudiante = null,
+        comentarioEstudiante = comentarioEstudiante,
         comentarioDocente = observacionDocente,
         rutaFotografia = evidenciaUrl
     )

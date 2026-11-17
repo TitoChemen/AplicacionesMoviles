@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material.icons.filled.WaterDrop
@@ -19,255 +20,82 @@ import cl.duoc.huertaescolar.viewmodel.SectorViewModel
 @Composable
 fun SectorScreen(
     viewModel: SectorViewModel,
-    onNavigateToCamera: () -> Unit,
-    onBackClick: () -> Unit = {},
-    idResponsable: String = "admin1",
-    onSectorClick: (Int) -> Unit = {}
+    onBackClick: () -> Unit,
+    onCrearSector: () -> Unit,
+    puedeCrear: Boolean,
+    esAdminGlobal: Boolean,
+    onSectorClick: (Int) -> Unit
 ) {
     val sectores by viewModel.sectores.collectAsState()
-
-    // Estados para errores y el diálogo de éxito
-    var hasError by remember { mutableStateOf(false) }
-    var mensajeExito by remember { mutableStateOf("") }
-    var mostrarDialogoExito by remember { mutableStateOf(false) }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Gestión de Sectores y Sensores") },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Volver"
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            )
-        }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // SECCIÓN 1: FORMULARIO DE REGISTRO
-                item {
-                    Card(
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Text(
-                                text = "Registrar Nuevo Sector",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-
-                            OutlinedTextField(
-                                value = viewModel.nombreSector,
-                                onValueChange = {
-                                    viewModel.nombreSector = it
-                                    hasError = false
-                                },
-                                label = { Text("Nombre del Sector") },
-                                isError = hasError && viewModel.nombreSector.isBlank(),
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
-                            )
-
-                            OutlinedTextField(
-                                value = viewModel.descripcionSector,
-                                onValueChange = {
-                                    viewModel.descripcionSector = it
-                                    viewModel.ubicacionSector = it
-                                },
-                                label = { Text("Descripción / Ubicación") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
-                            )
-
-                            if (hasError && viewModel.nombreSector.isBlank()) {
-                                Text(
-                                    text = "El nombre del sector no puede estar vacío.",
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-
-                            if (mensajeExito.isNotBlank()) {
-                                Text(
-                                    text = mensajeExito,
-                                    color = MaterialTheme.colorScheme.tertiary,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-
-                            Button(
-                                onClick = {
-                                    if (viewModel.nombreSector.isBlank()) {
-                                        hasError = true
-                                    } else {
-                                        viewModel.registrarSector(responsableId = idResponsable) {
-                                            mostrarDialogoExito = true
-                                            hasError = false
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.align(Alignment.End)
-                            ) {
-                                Text("Guardar Sector")
-                            }
+    val cursoPorSector by viewModel.cursoPorSector.collectAsState()
+    LaunchedEffect(esAdminGlobal) { if (esAdminGlobal) viewModel.cargarCursos() }
+    Scaffold(topBar = {
+        TopAppBar(title = { Text("Sectores y sensores") },
+            navigationIcon = {
+                IconButton(onClick = onBackClick) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer))
+    }) { insets ->
+        LazyColumn(modifier = Modifier.fillMaxSize().padding(insets),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (puedeCrear) item {
+                Button(onClick = onCrearSector, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Crear sector")
+                }
+            }
+            if (viewModel.errorGeneral != null) item {
+                Text(viewModel.errorGeneral.orEmpty(), color = MaterialTheme.colorScheme.error)
+            }
+            item {
+                Text("Sensores · Datos simulados", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ElevatedCard(modifier = Modifier.weight(1f)) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Icons.Default.Thermostat, contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error)
+                            Text("Temperatura", style = MaterialTheme.typography.bodySmall)
+                            Text("${viewModel.temperaturaSimulada} °C", style = MaterialTheme.typography.titleMedium)
                         }
                     }
-                }
-
-                // SECCIÓN 2: PANEL DE SENSORES SIMULADOS
-                item {
-                    Text(
-                        text = "Monitoreo de Sensores (Simulación)",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                }
-
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        // Tarjeta de Temperatura
-                        ElevatedCard(
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Thermostat,
-                                    contentDescription = "Temperatura",
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text("Temperatura", style = MaterialTheme.typography.bodyMedium)
-                                Text(
-                                    text = "${viewModel.temperaturaSimulada} °C",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
+                    ElevatedCard(modifier = Modifier.weight(1f)) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Icons.Default.WaterDrop, contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary)
+                            Text("Humedad suelo", style = MaterialTheme.typography.bodySmall)
+                            Text("${viewModel.humedadSimulada} %", style = MaterialTheme.typography.titleMedium)
                         }
-
-                        // Tarjeta de Humedad del Suelo
-                        ElevatedCard(
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.WaterDrop,
-                                    contentDescription = "Humedad",
-                                    tint = MaterialTheme.colorScheme.secondary
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text("Humedad Suelo", style = MaterialTheme.typography.bodyMedium)
-                                Text(
-                                    text = "${viewModel.humedadSimulada} %",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = MaterialTheme.colorScheme.secondary
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // SECCIÓN 3: LISTA DE SECTORES REGISTRADOS
-                item {
-                    Text(
-                        text = "Sectores Registrados en la Base de Datos",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                }
-
-                if (sectores.isEmpty()) {
-                    item {
-                        Text(
-                            text = "No hay sectores registrados todavía.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.outline
-                        )
-                    }
-                } else {
-                    items(sectores) { sector ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onSectorClick(sector.id) },
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = sector.nombre,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = sector.descripcion.ifBlank { "Sin descripción" },
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // SECCIÓN 4: BOTÓN DE NAVEGACIÓN A CÁMARA
-                item {
-                    Button(
-                        onClick = { onNavigateToCamera() },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 16.dp)
-                    ) {
-                        Text("Tomar Foto de Evidencia")
                     }
                 }
             }
-
-            // POP-UP DE ÉXITO FLOTANTE
-            if (mostrarDialogoExito) {
-                AlertDialog(
-                    onDismissRequest = { mostrarDialogoExito = false },
-                    title = { Text("¡Éxito!") },
-                    text = { Text("El sector se ha creado con éxito en la base de datos.") },
-                    confirmButton = {
-                        Button(
-                            onClick = { mostrarDialogoExito = false }
-                        ) {
-                            Text("Aceptar")
+            item { Text("Sectores registrados", style = MaterialTheme.typography.titleMedium) }
+            if (sectores.isEmpty()) item { Text("No hay sectores registrados.") }
+            items(sectores, key = { it.id }) { sector ->
+                ElevatedCard(modifier = Modifier.fillMaxWidth()
+                    .clickable { onSectorClick(sector.id) }) {
+                    Column(Modifier.fillMaxWidth().padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(sector.nombre, style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary)
+                        if (sector.estado == "INACTIVO") {
+                            Text("Archivado · solo consulta", style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.secondary)
                         }
-                    },
-                    modifier = Modifier.align(Alignment.Center)
-                )
+                        Text(sector.descripcion.ifBlank { "Sin descripción" },
+                            style = MaterialTheme.typography.bodyMedium)
+                        cursoPorSector[sector.id]?.let { curso ->
+                            Text(curso, style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.secondary)
+                        }
+                    }
+                }
             }
         }
     }

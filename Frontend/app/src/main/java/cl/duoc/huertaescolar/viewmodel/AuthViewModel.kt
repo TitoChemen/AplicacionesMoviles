@@ -86,7 +86,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                     perfil = campo("perfil")
                         ?: campo("rol")
                         ?: "ESTUDIANTE",
-                    tallerAsignado = campo("tallerAsignado") ?: "",
+                    tallerAsignado = campo("cursoCodigo") ?: "Sin curso",
                     estadoCuenta = estado,
                     contrasena = ""
                 )

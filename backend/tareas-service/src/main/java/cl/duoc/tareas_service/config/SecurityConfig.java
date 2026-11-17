@@ -72,6 +72,12 @@ public class SecurityConfig {
             if (rol == null) {
                 return List.of();
             }
+            // JWT previos: ADMINISTRADOR era antes un profesor.
+            // Nunca elevar esos tokens al rol administrador global.
+            if ("ADMINISTRADOR".equals(rol)
+                    && !Boolean.TRUE.equals(jwt.getClaim("adminGlobal"))) {
+                return List.of();
+            }
 
             return List.of(
                     new SimpleGrantedAuthority("ROLE_" + rol)
@@ -120,17 +126,17 @@ public class SecurityConfig {
                         .requestMatchers(
                                 HttpMethod.PUT,
                                 "/api/alertas/**"
-                        ).hasRole("ADMINISTRADOR")
+                        ).hasAnyRole("DOCENTE", "ADMINISTRADOR")
 
                         .requestMatchers(
                                 HttpMethod.PATCH,
                                 "/api/alertas/**"
-                        ).hasRole("ADMINISTRADOR")
+                        ).hasAnyRole("DOCENTE", "ADMINISTRADOR")
 
                         .requestMatchers(
                                 HttpMethod.DELETE,
                                 "/api/alertas/**"
-                        ).hasRole("ADMINISTRADOR")
+                        ).hasAnyRole("DOCENTE", "ADMINISTRADOR")
 
                         // ==================================
                         // TAREAS - CONSULTAS
@@ -174,22 +180,22 @@ public class SecurityConfig {
                         .requestMatchers(
                                 HttpMethod.PATCH,
                                 "/api/tareas/*/validacion"
-                        ).hasRole("ADMINISTRADOR")
+                        ).hasAnyRole("DOCENTE", "ADMINISTRADOR")
 
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/tareas"
-                        ).hasRole("ADMINISTRADOR")
+                        ).hasAnyRole("DOCENTE", "ADMINISTRADOR")
 
                         .requestMatchers(
                                 HttpMethod.PUT,
                                 "/api/tareas/**"
-                        ).hasRole("ADMINISTRADOR")
+                        ).hasAnyRole("DOCENTE", "ADMINISTRADOR")
 
                         .requestMatchers(
                                 HttpMethod.DELETE,
                                 "/api/tareas/**"
-                        ).hasRole("ADMINISTRADOR")
+                        ).hasAnyRole("DOCENTE", "ADMINISTRADOR")
 
                         // ==================================
                         // RESTO DE PETICIONES

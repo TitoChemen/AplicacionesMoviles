@@ -1,6 +1,9 @@
 package cl.duoc.huertaescolar.ui.theme.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
@@ -18,7 +21,7 @@ fun CrearCultivoScreen(
     viewModel: SectorViewModel,
     sectorId: Int
 ) {
-    var mensajeExito by remember { mutableStateOf("") }
+    var mensajeExito by rememberSaveable { mutableStateOf("") }
 
     Scaffold(
         topBar = {
@@ -40,6 +43,8 @@ fun CrearCultivoScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .imePadding()
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -80,22 +85,38 @@ fun CrearCultivoScreen(
                         maxLines = 2
                     )
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = viewModel.fechaSiembra,
-                            onValueChange = { viewModel.fechaSiembra = it },
-                            label = { Text("Siembra (YYYY-MM-DD)") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
-                        )
-
-                        OutlinedTextField(
-                            value = viewModel.fechaCosecha,
-                            onValueChange = { viewModel.fechaCosecha = it },
-                            label = { Text("Cosecha (YYYY-MM-DD)") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
-                        )
+                    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                        if (maxWidth < 420.dp) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedTextField(
+                                    value = viewModel.fechaSiembra,
+                                    onValueChange = { viewModel.fechaSiembra = it },
+                                    label = { Text("Siembra (YYYY-MM-DD)") },
+                                    modifier = Modifier.fillMaxWidth(), singleLine = true
+                                )
+                                OutlinedTextField(
+                                    value = viewModel.fechaCosecha,
+                                    onValueChange = { viewModel.fechaCosecha = it },
+                                    label = { Text("Cosecha (YYYY-MM-DD)") },
+                                    modifier = Modifier.fillMaxWidth(), singleLine = true
+                                )
+                            }
+                        } else {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedTextField(
+                                    value = viewModel.fechaSiembra,
+                                    onValueChange = { viewModel.fechaSiembra = it },
+                                    label = { Text("Siembra (YYYY-MM-DD)") },
+                                    modifier = Modifier.weight(1f), singleLine = true
+                                )
+                                OutlinedTextField(
+                                    value = viewModel.fechaCosecha,
+                                    onValueChange = { viewModel.fechaCosecha = it },
+                                    label = { Text("Cosecha (YYYY-MM-DD)") },
+                                    modifier = Modifier.weight(1f), singleLine = true
+                                )
+                            }
+                        }
                     }
 
                     // Mensaje de error general para las fechas

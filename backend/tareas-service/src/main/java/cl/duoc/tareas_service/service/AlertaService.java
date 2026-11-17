@@ -4,6 +4,7 @@ package cl.duoc.tareas_service.service;
 import cl.duoc.tareas_service.entity.Alerta;
 import cl.duoc.tareas_service.exception.RecursoNoEncontradoException;
 import cl.duoc.tareas_service.repository.AlertaRepository;
+import cl.duoc.tareas_service.security.CursoActual;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
@@ -22,73 +23,26 @@ public class AlertaService {
 
     private final AlertaRepository repository;
     private final ReferenciaService referenciaService;
+    private final CursoActual acceso;
 
     public AlertaService(
             AlertaRepository repository,
-            ReferenciaService referenciaService) {
+            ReferenciaService referenciaService, CursoActual acceso) {
 
         this.repository = repository;
         this.referenciaService = referenciaService;
+        this.acceso = acceso;
     }
 
-    // ==========================================
-    // SEGURIDAD Y AUTENTICACION
-    // ==========================================
-
-    private boolean esAdministrador() {
-
-        Authentication auth = SecurityContextHolder
-                .getContext()
-                .getAuthentication();
-
-        return auth != null
-                && auth.getAuthorities().stream()
-                .anyMatch(a ->
-                        a.getAuthority().equals(
-                                "ROLE_ADMINISTRADOR"));
-    }
-
-    private Long usuarioActualId() {
-
-        Authentication auth = SecurityContextHolder
-                .getContext()
-                .getAuthentication();
-
-        if (!(auth instanceof JwtAuthenticationToken jwt)) {
-            throw new AccessDeniedException(
-                    "Usuario no autenticado");
-        }
-
-        try {
-            return Long.valueOf(
-                    jwt.getToken().getSubject()
-            );
-        } catch (NumberFormatException e) {
-            throw new AccessDeniedException(
-                    "Identificador de usuario invalido");
-        }
-    }
-
-    private void exigirAdministrador() {
-
-        if (!esAdministrador()) {
-            throw new AccessDeniedException(
-                    "Solo administradores pueden realizar esta accion");
-        }
-    }
-
+    private boolean esAdministrador() { return acceso.esDocente(); }
+    private Long usuarioActualId() { return acceso.usuarioId(); }
+    private void exigirAdministrador() { acceso.exigirDocente(); }
     private void verificarPropietario(Alerta alerta) {
-
-        if (esAdministrador()) {
-            return;
-        }
-
-        if (alerta.getUsuarioId() == null
-                || !alerta.getUsuarioId()
-                .equals(usuarioActualId())) {
-
-            throw new AccessDeniedException(
-                    "No tienes permiso para acceder a esta alerta");
+        acceso.exigirCurso(alerta.getCursoId());
+        if (!esAdministrador() &&
+                (alerta.getUsuarioId() == null ||
+                 !alerta.getUsuarioId().equals(usuarioActualId()))) {
+            throw new AccessDeniedException("No tienes acceso a esta alerta");
         }
     }
 
@@ -99,13 +53,13 @@ public class AlertaService {
     @Transactional(readOnly = true)
     public List<Alerta> listar() {
 
+        if (acceso.esAdminGlobal()) return repository.findAll();
         if (esAdministrador()) {
-            return repository.findAll();
+            return repository.findByCursoId(acceso.id());
         }
 
-        return repository.findByUsuarioId(
-                usuarioActualId()
-        );
+        return repository.findByCursoIdAndUsuarioId(
+                acceso.id(), usuarioActualId());
     }
 
     @Transactional(readOnly = true)
@@ -124,14 +78,13 @@ public class AlertaService {
     @Transactional(readOnly = true)
     public List<Alerta> porSector(Long sectorId) {
 
+        if (acceso.esAdminGlobal()) return repository.findBySectorId(sectorId);
         if (esAdministrador()) {
-            return repository.findBySectorId(sectorId);
+            return repository.findByCursoIdAndSectorId(acceso.id(), sectorId);
         }
 
-        return repository.findBySectorIdAndUsuarioId(
-                sectorId,
-                usuarioActualId()
-        );
+        return repository.findByCursoIdAndSectorIdAndUsuarioId(
+                acceso.id(), sectorId, usuarioActualId());
     }
 
     // ==========================================
@@ -144,12 +97,11 @@ public class AlertaService {
         validar(alerta);
 
         // Comprobar que el sector existe y esta activo.
-        referenciaService.validarSector(
-                alerta.getSectorId()
-        );
+        Long cursoSector = referenciaService.validarSector(alerta.getSectorId());
 
         // El ID se genera desde la base de datos.
         alerta.setId(null);
+        alerta.setCursoId(cursoSector);
 
         if (!esAdministrador()) {
 
@@ -167,9 +119,11 @@ public class AlertaService {
 
             // Comprobar que el usuario asignado
             // existe y esta activo.
-            referenciaService.validarUsuarioActivo(
-                    alerta.getUsuarioId()
-            );
+            Long cursoUsuario = referenciaService.validarUsuarioActivo(alerta.getUsuarioId());
+            if (!cursoSector.equals(cursoUsuario)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "El usuario y el sector deben pertenecer al mismo curso");
+            }
         }
 
         // Estado y fecha controlados por el backend.
@@ -196,22 +150,29 @@ public class AlertaService {
         validar(datos);
 
         // Validar sector antes de modificar datos.
-        referenciaService.validarSector(
-                datos.getSectorId()
-        );
+        Long nuevoCurso = referenciaService.validarSector(datos.getSectorId());
 
         // Si se proporciona un nuevo usuario,
         // comprobar que exista y este activo.
         if (datos.getUsuarioId() != null) {
 
-            referenciaService.validarUsuarioActivo(
-                    datos.getUsuarioId()
-            );
-
+            Long cursoUsuario = referenciaService.validarUsuarioActivo(datos.getUsuarioId());
+            if (!nuevoCurso.equals(cursoUsuario)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "El usuario y el sector deben pertenecer al mismo curso");
+            }
             actual.setUsuarioId(datos.getUsuarioId());
         }
 
+        if (actual.getUsuarioId() != null && datos.getUsuarioId() == null) {
+            Long cursoUsuario = referenciaService.validarUsuarioActivo(actual.getUsuarioId());
+            if (!nuevoCurso.equals(cursoUsuario)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "El usuario actual no pertenece al nuevo sector");
+            }
+        }
         actual.setSectorId(datos.getSectorId());
+        actual.setCursoId(nuevoCurso); // deriva del sector validado, no del body.
         actual.setTipo(datos.getTipo());
         actual.setDescripcion(datos.getDescripcion());
 

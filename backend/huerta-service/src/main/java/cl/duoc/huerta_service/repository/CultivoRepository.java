@@ -10,5 +10,7 @@ public interface CultivoRepository
 
     List<Cultivo> findBySectorId(Long sectorId);
 
+    List<Cultivo> findBySectorIdIn(java.util.Collection<Long> sectorIds);
+
     boolean existsBySectorId(Long sectorId);
 }

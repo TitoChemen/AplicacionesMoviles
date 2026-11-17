@@ -31,4 +31,11 @@ public class Usuario {
 
     @Column(nullable = false)
     private Boolean activo = true;
+
+    @Column(name = "curso_id")
+    private Long cursoId;
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "curso_id", insertable = false, updatable = false)
+    private Curso curso;
 }

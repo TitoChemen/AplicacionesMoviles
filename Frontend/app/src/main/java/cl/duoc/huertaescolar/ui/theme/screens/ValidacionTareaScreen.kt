@@ -40,6 +40,7 @@ fun ValidacionTareaScreen(
 
     val tareas by viewModel.tareasSinFiltrar.collectAsState()
     val tarea = tareas.find { it.id == tareaId }
+    val cursoPorTarea by viewModel.cursoPorTarea.collectAsState()
 
     var procesando by remember {
         mutableStateOf(false)
@@ -185,10 +186,16 @@ fun ValidacionTareaScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(16.dp)
-                    .verticalScroll(rememberScrollState()),
+                    .imePadding()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+
+                OutlinedButton(
+                    onClick = { navController.navigate("historial_tarea/$tareaId") },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Ver historial de evidencias") }
 
                 // ==================================
                 // INFORMACIÓN DE LA TAREA
@@ -212,6 +219,9 @@ fun ValidacionTareaScreen(
                         Text(
                             text = tarea.descripcion
                         )
+                        cursoPorTarea[tarea.id]?.let { codigo ->
+                            Text("Curso: $codigo", fontWeight = FontWeight.SemiBold)
+                        }
 
                         Text(
                             text = "Asignado a: ${tarea.asignadoA}",
@@ -249,14 +259,14 @@ fun ValidacionTareaScreen(
                         )
 
                         Text(
-                            text = "Comentario del estudiante:",
+                            text = "Justificación enviada por el estudiante:",
                             fontWeight = FontWeight.SemiBold
                         )
 
                         Text(
                             text = tarea.comentarioEstudiante
                                 ?.takeIf { it.isNotBlank() }
-                                ?: "Sin comentarios."
+                                ?: "El estudiante no escribió una justificación."
                         )
 
                         Divider()
@@ -329,13 +339,16 @@ fun ValidacionTareaScreen(
                         },
                         label = {
                             Text(
-                                "Retroalimentación del administrador"
+                                "Retroalimentación del docente"
                             )
                         },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !procesando,
                         minLines = 3
                     )
+
+                    Text("Para rechazar, escribe primero el motivo de la corrección.",
+                        style = MaterialTheme.typography.bodySmall)
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -376,7 +389,8 @@ fun ValidacionTareaScreen(
                             },
                             modifier = Modifier.weight(1f),
                             enabled = !procesando &&
-                                    !accessToken.isNullOrBlank(),
+                                    !accessToken.isNullOrBlank() &&
+                                    viewModel.comentarioValidacion.isNotBlank(),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor =
                                     MaterialTheme.colorScheme.error

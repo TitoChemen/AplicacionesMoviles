@@ -26,7 +26,7 @@ fun DashboardScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Hola, ${usuario?.nombreFicticio?.split(" ")?.first() ?: "Usuario"}") },
+                title = { Text("Huerta Escolar") },
                 actions = {
                     IconButton(onClick = onLogout) {
                         Icon(imageVector = Icons.Filled.ExitToApp, contentDescription = "Cerrar sesión")
@@ -52,7 +52,12 @@ fun DashboardScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "Panel de ${usuario?.perfil ?: "Invitado"}",
+                    text = when (usuario?.perfil) {
+                        Perfil.ADMINISTRADOR -> "Administración general · Todos los cursos"
+                        Perfil.DOCENTE -> "Docente · Curso ${usuario.tallerAsignado}"
+                        Perfil.ESTUDIANTE -> "Estudiante · Curso ${usuario.tallerAsignado}"
+                        else -> "Panel de invitado"
+                    },
                     modifier = Modifier.padding(16.dp),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSecondaryContainer
@@ -60,7 +65,7 @@ fun DashboardScreen(
             }
 
             // Renderizado dinámico según el rol (Checklist: Mostrar un Dashboard diferente según el rol)
-            if (usuario?.perfil == Perfil.ADMINISTRADOR) {
+            if (Perfil.esPersonal(usuario?.perfil)) {
                 MenuAdministrador(navController)
             } else {
                 MenuEstudiante(navController)
@@ -72,9 +77,9 @@ fun DashboardScreen(
 @Composable
 fun MenuAdministrador(navController: NavController) {
     LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        columns = GridCells.Adaptive(minSize = 150.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
             DashboardCard(
@@ -110,9 +115,9 @@ fun MenuAdministrador(navController: NavController) {
 @Composable
 fun MenuEstudiante(navController: NavController) {
     LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        columns = GridCells.Adaptive(minSize = 150.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
             DashboardCard(
@@ -144,7 +149,7 @@ fun DashboardCard(titulo: String, icono: ImageVector, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1f)
+            .height(132.dp)
             .clickable { onClick() },
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -159,7 +164,7 @@ fun DashboardCard(titulo: String, icono: ImageVector, onClick: () -> Unit) {
             Icon(
                 imageVector = icono,
                 contentDescription = titulo,
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier.size(32.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(8.dp))

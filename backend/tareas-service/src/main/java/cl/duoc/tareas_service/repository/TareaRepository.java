@@ -10,6 +10,10 @@ public interface TareaRepository
         extends JpaRepository<Tarea, Long> {
 
     List<Tarea> findBySectorId(Long sectorId);
+    List<Tarea> findByCursoId(Long cursoId);
+    List<Tarea> findByCursoIdAndSectorId(Long cursoId, Long sectorId);
+    List<Tarea> findByCursoIdAndEstudianteId(Long cursoId, Long estudianteId);
+    List<Tarea> findByCursoIdAndEstado(Long cursoId, EstadoTarea estado);
 
     List<Tarea> findByEstudianteId(Long estudianteId);
 

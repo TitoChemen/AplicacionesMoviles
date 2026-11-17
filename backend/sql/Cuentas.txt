@@ -1,0 +1,25 @@
+HUERTA ESCOLAR - CUENTAS DE DEMOSTRACION (7-A, 7-B, 8-A)
+Fecha: 17-11-2026 | SOLO PARA DESARROLLO LOCAL
+
+Rol	Nombre	Correo	Contrasena del SQL demo	Curso
+ADMINISTRADOR	Administradora General	admin.global@huerta.cl	AdminGlobal2026!	TODOS
+DOCENTE	Profesor Juan	profesor@huerta.cl	Profesor123!	7-A
+DOCENTE	Profesor Gabriel 7-B	profesor.7b@huerta.cl	Profesor7B2026!	7-B
+DOCENTE	Maria Gonzalez	maria.docente@huerta.cl	Docente2026!	7-B
+DOCENTE	Pedro Ramirez	pedro.docente@huerta.cl	Docente2026!	8-A
+ESTUDIANTE	Kevin Estudiante	estudiante@huerta.cl	Estudiante123!	7-A
+ESTUDIANTE	Valentina Perez	valentina@huerta.cl	Estudiante2026!	7-A
+ESTUDIANTE	Camila Rojas	camila@huerta.cl	Estudiante2026!	7-B
+ESTUDIANTE	Matias Soto	matias@huerta.cl	Estudiante2026!	7-B
+ESTUDIANTE	Sofia Herrera	sofia@huerta.cl	Estudiante2026!	7-B
+ESTUDIANTE	Diego Morales	diego@huerta.cl	Estudiante2026!	8-A
+ESTUDIANTE	Benjamin Torres	benjamin@huerta.cl	Estudiante2026!	8-A
+
+IMPORTANTE:
+- Son contrasenas de demostracion definidas en init_huerta_escolar_cursos.sql.
+- Al ejecutar el inicializador sobre usuarios existentes, varias contrasenas se CONSERVAN
+  por seguridad. Este TXT no puede confirmar la clave real almacenada en tu MariaDB.
+- El backend debe tener app.auth.plaintext-dev=true para usar claves en texto plano.
+- Nunca compartir ni desplegar estas credenciales como cuentas reales.
+- Para recuperar las cuentas faltantes sin reinicializar todo: sincronizar_cuentas_demo_v3.sql.
+- Si editas usuarios o contrasenas, actualiza manualmente este TXT.

@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -28,16 +27,19 @@ import cl.duoc.huertaescolar.data.local.entity.Tarea
 import cl.duoc.huertaescolar.data.local.entity.Usuario
 import cl.duoc.huertaescolar.viewmodel.TareaViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ListaTareasScreen(
     navController: NavController,
     viewModel: TareaViewModel,
-    usuarioActivo: Usuario?
+    usuarioActivo: Usuario?,
+    accessToken: String?
 ) {
     val tareas by viewModel.tareasFiltradas.collectAsState()
     val filtroActual by viewModel.filtroSeleccionado.collectAsState()
-    val esAdmin = usuarioActivo?.perfil == Perfil.ADMINISTRADOR
+    val esAdmin = Perfil.esPersonal(usuarioActivo?.perfil)
+    val cursoPorTarea by viewModel.cursoPorTarea.collectAsState()
+    val intentosPorTarea by viewModel.intentosPorTarea.collectAsState()
 
 
     Scaffold(
@@ -77,14 +79,14 @@ fun ListaTareasScreen(
                 .padding(paddingValues)
                 .background(Color(0xFFF1F8E9)) // Fondo verde ultra claro (tipo campo / huerto)
         ) {
-            // Carrusel horizontal de filtros
-            LazyRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp, horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            // Filtros responsivos: se acomodan en nuevas filas sin cortar etiquetas.
+            FlowRow(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(vertical = 6.dp, horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
-                items(EstadoTarea.filtros) { opcion ->
+                EstadoTarea.filtros.forEach { opcion ->
                     FilterChip(
                         selected = filtroActual == opcion,
                         onClick = { viewModel.actualizarFiltro(opcion) },
@@ -109,39 +111,24 @@ fun ListaTareasScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Calculamos el índice de reintento agrupando por descripción similar
-                    items(tareas.indices.toList()) { index ->
-                        val tarea = tareas[index]
-
-                        // Calculamos cuántas veces aparece esta misma tarea antes en la lista para sacar el número de reintento
-                        val tareasAnterioresMismoNombre = tareas.take(index).count { it.descripcion == tarea.descripcion }
-                        val numeroReintento = tareasAnterioresMismoNombre + 1
+                    items(tareas, key = { it.id }) { tarea ->
+                        val numeroReintento = intentosPorTarea[tarea.id] ?: 0
 
                         TareaCard(
                             tarea = tarea,
                             numeroReintento = numeroReintento,
                             esAdmin = esAdmin,
+                            curso = cursoPorTarea[tarea.id],
                             onEdit = {
                                 viewModel.prepararEdicion(tarea)
                                 navController.navigate("crear_tarea")
                             },
-                            onDelete = { viewModel.eliminarTarea(tarea) }
+                            onDelete = { viewModel.eliminarTarea(tarea, accessToken) }
                         ) {
                             if (esAdmin) {
-                                if (
-                                    tarea.estado == EstadoTarea.PENDIENTE_VALIDACION ||
-                                    tarea.estado == EstadoTarea.VALIDADA ||
-                                    tarea.estado == "REALIZADA"
-                                ) {
-                                    navController.navigate("validacion_tarea/${tarea.id}")
-                                }
+                                navController.navigate("validacion_tarea/${tarea.id}")
                             } else {
-                                if (
-                                    tarea.estado == EstadoTarea.PENDIENTE ||
-                                    tarea.estado == EstadoTarea.RECHAZADA
-                                ) {
-                                    navController.navigate("detalle_tarea/${tarea.id}")
-                                }
+                                navController.navigate("detalle_tarea/${tarea.id}")
                             }
                         }
                     }
@@ -156,6 +143,7 @@ fun TareaCard(
     tarea: Tarea,
     numeroReintento: Int,
     esAdmin: Boolean = false,
+    curso: String? = null,
     onEdit: () -> Unit = {},
     onDelete: () -> Unit = {},
     onClick: () -> Unit
@@ -212,13 +200,13 @@ fun TareaCard(
 
                 Column(modifier = Modifier.weight(1f)) {
                     // 🌿 Etiqueta de Reintento con color tierra / verde musgo natural
-                    if (numeroReintento > 1 || tarea.estado == EstadoTarea.RECHAZADA || tarea.estado == EstadoTarea.VALIDADA) {
+                    if (numeroReintento > 1) {
                         Surface(
                             color = Color(0xFFDCEDC8), // Verde hoja suave
                             shape = MaterialTheme.shapes.extraSmall
                         ) {
                             Text(
-                                text = "🌱 Reintento #$numeroReintento",
+                                text = "🌱 Intento #$numeroReintento",
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color(0xFF33691E), // Verde musgo oscuro
@@ -242,6 +230,15 @@ fun TareaCard(
                         color = Color(0xFF558B2F)
                     )
 
+                    if (esAdmin && !curso.isNullOrBlank()) {
+                        Text(
+                            text = "Curso: $curso",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color(0xFF1B5E20),
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
                     Text(
                         text = "Vence: ${tarea.fechaProgramada}",
                         style = MaterialTheme.typography.bodySmall,
@@ -264,7 +261,12 @@ fun TareaCard(
                         )
                     }
 
-                    if (esAdmin) {
+                    if (esAdmin && (numeroReintento > 0 || !tarea.rutaFotografia.isNullOrBlank())) {
+                        Text("Historial protegido · Toca para revisar",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.secondary)
+                    }
+                    if (esAdmin && numeroReintento == 0 && tarea.rutaFotografia.isNullOrBlank()) {
                         Row {
                             IconButton(onClick = onEdit) {
                                 Icon(
