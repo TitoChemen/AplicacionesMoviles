@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     id("com.google.devtools.ksp")
+    alias(libs.plugins.kover)
 
 }
 
@@ -21,8 +22,8 @@ android {
         applicationId = "cl.duoc.huertaescolar"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 12
+        versionName = "2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Emulador por defecto; usar -PHUERTA_API_BASE_URL=http://IP_DEL_PC:8080/
@@ -110,3 +111,21 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 }
+
+/*kover {
+    reports {
+        filters {
+            includes {
+                classes(
+                    "cl.duoc.consumiendoapi.ui.form.ClienteValidator*",
+                    "cl.duoc.consumiendoapi.ui.form.ClienteFormViewModel*",
+                    "cl.duoc.consumiendoapi.ui.clientes.ClientesViewModel*",
+                    "cl.duoc.consumiendoapi.data.repository.ClientesRepository*",
+                    "cl.duoc.consumiendoapi.data.repository.ApiErrorMapper*",
+                    "cl.duoc.consumiendoapi.data.usecase.ClientesUseCases*",
+                    "cl.duoc.consumiendoapi.domain.usecase.CalcularEstadisticasUseCase*"
+                )
+            }
+        }
+    }
+}*/ //ADAPTAR A NUESTRO PROYECTO
