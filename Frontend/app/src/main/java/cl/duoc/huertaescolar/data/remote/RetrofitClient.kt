@@ -1,5 +1,6 @@
 package cl.duoc.huertaescolar.data.remote
 
+import cl.duoc.huertaescolar.BuildConfig
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -7,7 +8,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 
 object RetrofitClient {
 
-    private const val BASE_URL = "http://10.0.2.2:8080/"
+    private val BASE_URL = BuildConfig.BACKEND_BASE_URL
 
     private val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -28,6 +29,19 @@ object RetrofitClient {
             .addConverterFactory(GsonConverterFactory.create())
             .build()
     }
+
+    // Cliente separado: los fallos de Open-Meteo no afectan los microservicios propios.
+    private val climaRetrofit: Retrofit by lazy {
+        Retrofit.Builder()
+            .baseUrl("https://api.open-meteo.com/")
+            .client(httpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+    }
+
+    val climaApi: ClimaApi by lazy { climaRetrofit.create(ClimaApi::class.java) }
+
+    val alertaApi: AlertaApi by lazy { retrofit.create(AlertaApi::class.java) }
 
     val usuarioApi: UsuarioApi by lazy { retrofit.create(UsuarioApi::class.java) }
 

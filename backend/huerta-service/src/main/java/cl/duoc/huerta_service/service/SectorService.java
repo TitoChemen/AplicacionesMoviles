@@ -44,7 +44,7 @@ public class SectorService {
 
     @Transactional
     public Sector crear(Sector sector) {
-        acceso.exigirDocente(); // incluye al admin global
+        acceso.exigirAdminGlobal();
         validar(sector);
 
         if (sectorRepository.existsByCodigo(sector.getCodigo())) {
@@ -52,13 +52,8 @@ public class SectorService {
                     "El código del sector ya existe");
         }
 
-        Long cursoDestino;
-        if (acceso.esAdminGlobal()) {
-            cursoDestino = sector.getCursoId();
-            cursos.exigirCursoExistente(cursoDestino);
-        } else {
-            cursoDestino = acceso.id(); // el docente NO elige otro curso
-        }
+        Long cursoDestino = sector.getCursoId();
+        cursos.exigirCursoExistente(cursoDestino);
         sector.setId(null);
         sector.setCursoId(cursoDestino);
         sector.setResponsableId(acceso.usuarioId().toString());
@@ -67,9 +62,17 @@ public class SectorService {
 
     @Transactional
     public Sector actualizar(Long id, Sector datos) {
-        acceso.exigirDocente();
+        acceso.exigirAdminGlobal();
         Sector actual = buscar(id);
         validar(datos);
+
+        Long cursoDestino = datos.getCursoId();
+        cursos.exigirCursoExistente(cursoDestino);
+        if (!java.util.Objects.equals(actual.getCursoId(), cursoDestino)) {
+            // Tareas y alertas guardan cursoId propio: no se pueden dejar en el
+            // curso anterior al trasladar el sector y sus cultivos.
+            dependencias.exigirSinTareasNiAlertas(id);
+        }
 
         if (!actual.getCodigo().equals(datos.getCodigo())
                 && sectorRepository.existsByCodigo(datos.getCodigo())) {
@@ -82,14 +85,15 @@ public class SectorService {
         actual.setDescripcion(datos.getDescripcion());
         actual.setUbicacion(datos.getUbicacion());
         actual.setEstado(datos.getEstado());
-        // Fecha de creación, curso y responsable son inmutables mediante PUT.
+        actual.setCursoId(cursoDestino);
+        // Fecha de creación y responsable son inmutables mediante PUT.
 
         return sectorRepository.save(actual);
     }
 
     @Transactional
     public void eliminar(Long id) {
-        acceso.exigirDocente();
+        acceso.exigirAdminGlobal();
         buscar(id);
 
         if (cultivoRepository.existsBySectorId(id)) {

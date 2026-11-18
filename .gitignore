@@ -28,6 +28,7 @@
 *.jks
 *.keystore
 *.p12
+!Frontend/signing/huerta-demo-release.jks
 
 # Archivos temporales
 *.log

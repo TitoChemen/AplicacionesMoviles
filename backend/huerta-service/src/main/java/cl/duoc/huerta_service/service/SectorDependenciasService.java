@@ -35,16 +35,16 @@ public class SectorDependenciasService {
             Object[] tareas = consultar("/api/tareas/sector/{id}", sectorId);
             if (tareas != null && tareas.length > 0) {
                 throw new ConflictoException(
-                        "El sector tiene tareas asignadas o evidencias. Archívalo para conservar el historial.");
+                    "El sector tiene tareas asignadas o evidencias. Resuélvelas antes de cambiar su curso o archívalo.");
             }
             Object[] alertas = consultar("/api/alertas/sector/{id}", sectorId);
             if (alertas != null && alertas.length > 0) {
                 throw new ConflictoException(
-                        "El sector tiene alertas registradas. Archívalo en lugar de eliminarlo.");
+                    "El sector tiene alertas registradas. Resuélvelas antes de cambiar su curso o archívalo.");
             }
         } catch (RestClientException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-                    "No se pudo verificar las tareas/alertas. Revisa tareas-service y el gateway antes de eliminar.", ex);
+                    "No se pudo verificar las tareas/alertas. Revisa tareas-service y el gateway antes de cambiar o eliminar el sector.", ex);
         }
     }
 

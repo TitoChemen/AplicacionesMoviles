@@ -157,6 +157,7 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
     // =========================================================
 
     private var jobTareas: Job? = null
+    private var sessionToken: String? = null
 
 
     fun cargarTareasSegunRol(
@@ -164,6 +165,7 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
         accessToken: String?
     ) {
         jobTareas?.cancel()
+        sessionToken = accessToken
 
         if (usuarioActivo == null || accessToken.isNullOrBlank()) {
             _tareasBase.value = emptyList()
@@ -202,6 +204,8 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     }
 
+                if (accessToken != sessionToken) return@launch
+
                 val tareasConvertidas = tareasRemotas.map { it.aTareaLocal() }
                 _intentosPorTarea.value = tareasRemotas.associate { t ->
                     t.id.toInt() to t.intentoActual
@@ -209,8 +213,10 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
 
                 // Obtiene códigos legibles 7-A/7-B para el administrador global.
                 if (usuarioActivo.perfil == Perfil.ADMINISTRADOR) {
-                    val usuarios = runCatching { RetrofitClient.usuarioApi.listar(token) }
-                        .getOrElse { emptyList() }
+                    val usuarios = try { RetrofitClient.usuarioApi.listar(token) }
+                        catch (e: CancellationException) { throw e }
+                        catch (e: Exception) { emptyList() }
+                    if (accessToken != sessionToken) return@launch
                     val cursos = usuarios.mapNotNull { u ->
                         u.cursoId?.let { it to (u.cursoCodigo ?: "Curso #$it") }
                     }.toMap()
@@ -230,13 +236,15 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
                     "Tareas cargadas desde Spring Boot: ${tareasConvertidas.size}"
                 )
 
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: HttpException) {
                 Log.e(
                     "TareaViewModel",
                     "Error HTTP ${e.code()} al obtener tareas",
                     e
                 )
-                _tareasBase.value = emptyList()
+                if (accessToken == sessionToken) _tareasBase.value = emptyList()
 
             } catch (e: IOException) {
                 Log.e(
@@ -244,7 +252,7 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
                     "Error de conexión con Tareas Service",
                     e
                 )
-                _tareasBase.value = emptyList()
+                if (accessToken == sessionToken) _tareasBase.value = emptyList()
 
             } catch (e: Exception) {
                 Log.e(
@@ -252,7 +260,7 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
                     "Error inesperado al cargar tareas",
                     e
                 )
-                _tareasBase.value = emptyList()
+                if (accessToken == sessionToken) _tareasBase.value = emptyList()
             }
         }
     }
@@ -314,6 +322,9 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
                 val token = "Bearer $accessToken"
                 val usuarios = RetrofitClient.usuarioApi.listar(token)
                     .filter { it.rol == Perfil.ESTUDIANTE && it.activo }
+                val sectoresRemotos = RetrofitClient.sectorApi.listar(token)
+                    .filter { it.estado == "ACTIVO" }
+                if (accessToken != sessionToken) return@launch
                 _cursoIdPorEstudiante.value = usuarios.associate { it.id to it.cursoId }
                 _estudiantesDisponibles.value = usuarios.map {
                         Usuario(
@@ -325,9 +336,11 @@ class TareaViewModel(application: Application) : AndroidViewModel(application) {
                             backendId = it.id
                         )
                     }
-                _sectoresDisponibles.value = RetrofitClient.sectorApi.listar(token)
-                    .filter { it.estado == "ACTIVO" }
+                _sectoresDisponibles.value = sectoresRemotos
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
+                if (accessToken != sessionToken) return@launch
                 Log.e("TareaViewModel", "No se pudieron cargar usuarios/sectores", e)
                 _estudiantesDisponibles.value = emptyList()
                 _sectoresDisponibles.value = emptyList()

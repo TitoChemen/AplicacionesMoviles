@@ -17,6 +17,7 @@ import cl.duoc.huertaescolar.data.remote.RetrofitClient
 import cl.duoc.huertaescolar.data.remote.aCultivoLocal
 import cl.duoc.huertaescolar.data.remote.aSectorLocal
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -37,12 +38,16 @@ class SectorViewModel(application: Application) :
     val cultivos = _cultivos.asStateFlow()
 
     private var accessToken: String? = null
+    private var datosJob: Job? = null
+    private var cursosJob: Job? = null
     private val _cursosDisponibles = MutableStateFlow<List<CursoDto>>(emptyList())
     val cursosDisponibles = _cursosDisponibles.asStateFlow()
     var cursoSeleccionadoId by mutableStateOf<Long?>(null)
     private val _idCursoPorSector = MutableStateFlow<Map<Int, Long?>>(emptyMap())
     private val _cursoPorSector = MutableStateFlow<Map<Int, String>>(emptyMap())
     val cursoPorSector = _cursoPorSector.asStateFlow()
+
+    fun cursoIdDeSector(sectorId: Int): Long? = _idCursoPorSector.value[sectorId]
 
     private fun actualizarNombreCursoSector() {
         val nombrePorId = _cursosDisponibles.value.associate { it.id to it.codigo }
@@ -53,9 +58,12 @@ class SectorViewModel(application: Application) :
 
     fun cargarCursos() {
         if (accessToken.isNullOrBlank()) return
-        viewModelScope.launch {
+        cursosJob?.cancel()
+        val sesion = accessToken
+        cursosJob = viewModelScope.launch {
             try {
                 val cursos = RetrofitClient.cursoApi.listar(tokenAutenticado())
+                if (sesion != accessToken) return@launch
                 _cursosDisponibles.value = cursos
                 actualizarNombreCursoSector()
                 if (cursoSeleccionadoId != null && cursos.none { it.id == cursoSeleccionadoId })
@@ -63,7 +71,8 @@ class SectorViewModel(application: Application) :
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                errorGeneral = "No se pudo obtener la lista de cursos: ${e.message}"
+                if (sesion == accessToken)
+                    errorGeneral = "No se pudo obtener la lista de cursos: ${e.message}"
             }
         }
     }
@@ -82,7 +91,10 @@ class SectorViewModel(application: Application) :
     fun configurarSesion(token: String?) {
         if (accessToken == token) return
 
+        datosJob?.cancel()
+        cursosJob?.cancel()
         accessToken = token
+        cargando = false
         _sectores.value = emptyList()
         _cultivos.value = emptyList()
         _cursosDisponibles.value = emptyList()
@@ -115,7 +127,9 @@ class SectorViewModel(application: Application) :
     fun cargarDatos() {
         if (accessToken.isNullOrBlank()) return
 
-        viewModelScope.launch {
+        datosJob?.cancel()
+        val sesion = accessToken
+        datosJob = viewModelScope.launch {
             cargando = true
             errorGeneral = null
 
@@ -127,6 +141,8 @@ class SectorViewModel(application: Application) :
 
                 val cultivosRemotos =
                     RetrofitClient.cultivoApi.listar(token)
+
+                if (sesion != accessToken) return@launch
 
                 _sectores.value =
                     sectoresRemotos.map { it.aSectorLocal() }
@@ -147,10 +163,10 @@ class SectorViewModel(application: Application) :
                     e
                 )
 
-                errorGeneral =
+                if (sesion == accessToken) errorGeneral =
                     "No se pudieron cargar los datos: ${e.message}"
             } finally {
-                cargando = false
+                if (sesion == accessToken) cargando = false
             }
         }
     }
@@ -204,7 +220,11 @@ class SectorViewModel(application: Application) :
                 "La ubicación del sector es obligatoria."
         }
 
-        if (esAdminGlobal && cursoSeleccionadoId == null) {
+        if (!esAdminGlobal) {
+            errorGeneral = "Solo el administrador puede crear sectores."
+            return
+        }
+        if (cursoSeleccionadoId == null) {
             errorGeneral = "Selecciona un curso para el sector."
             return
         }
@@ -231,7 +251,7 @@ class SectorViewModel(application: Application) :
                     estado = "ACTIVO",
                     fechaCreacion = LocalDate.now().toString(),
                     responsableId = responsableId,
-                    cursoId = if (esAdminGlobal) cursoSeleccionadoId else null
+                    cursoId = cursoSeleccionadoId
                 )
 
                 val creado =
@@ -302,6 +322,7 @@ class SectorViewModel(application: Application) :
         ubicacion: String,
         descripcion: String,
         estado: String,
+        cursoId: Long?,
         onSuccess: () -> Unit
     ) {
         if (cargando) return
@@ -312,6 +333,10 @@ class SectorViewModel(application: Application) :
         }
         if (estado !in setOf("ACTIVO", "INACTIVO")) {
             errorGeneral = "Selecciona un estado válido."
+            return
+        }
+        if (cursoId == null || _cursosDisponibles.value.none { it.id == cursoId }) {
+            errorGeneral = "Selecciona un curso válido para el sector."
             return
         }
 
@@ -329,7 +354,7 @@ class SectorViewModel(application: Application) :
                         estado = estado,
                         fechaCreacion = sector.fechaCreacion,
                         responsableId = sector.responsableId,
-                        cursoId = _idCursoPorSector.value[sector.id]
+                        cursoId = cursoId
                     )
                 )
                 _sectores.value = _sectores.value.map {
@@ -352,7 +377,7 @@ class SectorViewModel(application: Application) :
 
     fun archivarSector(sector: Sector, onSuccess: () -> Unit) {
         editarSector(sector, sector.nombre, sector.ubicacion,
-            sector.descripcion, "INACTIVO", onSuccess)
+            sector.descripcion, "INACTIVO", cursoIdDeSector(sector.id), onSuccess)
     }
 
     fun eliminarSector(sector: Sector, onSuccess: () -> Unit) {
@@ -383,6 +408,62 @@ class SectorViewModel(application: Application) :
     // =====================================
     // FORMULARIO CULTIVO
     // =====================================
+
+    fun editarCultivo(cultivo: Cultivo, nombre: String, descripcion: String,
+                     onSuccess: () -> Unit) {
+        if (cargando) return
+        if (nombre.isBlank()) {
+            errorGeneral = "El nombre del cultivo es obligatorio."
+            return
+        }
+        viewModelScope.launch {
+            cargando = true
+            errorGeneral = null
+            try {
+                val actualizado = RetrofitClient.cultivoApi.actualizar(
+                    tokenAutenticado(), cultivo.id.toLong(),
+                    CrearCultivoRequestDto(
+                        sectorId = cultivo.sectorId.toLong(),
+                        nombreComun = nombre.trim(),
+                        descripcion = descripcion.trim(),
+                        fechaSiembra = cultivo.fechaSiembra,
+                        fechaCosechaEstimada = cultivo.fechaCosechaEstimada,
+                        frecuenciaRiego = cultivo.frecuenciaRiego,
+                        estadoDesarrollo = cultivo.estadoDesarrollo
+                    )
+                )
+                _cultivos.value = _cultivos.value.map {
+                    if (it.id == cultivo.id) actualizado.aCultivoLocal() else it
+                }
+                onSuccess()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                errorGeneral = "No se pudo editar el cultivo: ${e.message}"
+            } finally {
+                cargando = false
+            }
+        }
+    }
+
+    fun eliminarCultivo(cultivo: Cultivo, onSuccess: () -> Unit) {
+        if (cargando) return
+        viewModelScope.launch {
+            cargando = true
+            errorGeneral = null
+            try {
+                RetrofitClient.cultivoApi.eliminar(tokenAutenticado(), cultivo.id.toLong())
+                _cultivos.value = _cultivos.value.filterNot { it.id == cultivo.id }
+                onSuccess()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                errorGeneral = "No se pudo eliminar el cultivo: ${e.message}"
+            } finally {
+                cargando = false
+            }
+        }
+    }
 
     var nombreCultivo by mutableStateOf("")
     var descripcionCultivo by mutableStateOf("")

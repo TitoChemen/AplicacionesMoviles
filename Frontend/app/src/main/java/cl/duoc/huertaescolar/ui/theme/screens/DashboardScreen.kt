@@ -128,6 +128,13 @@ fun MenuEstudiante(navController: NavController) {
         }
         item {
             DashboardCard(
+                titulo = "Sectores de mi curso",
+                icono = Icons.Filled.Forest,
+                onClick = { navController.navigate("lista_sectores") }
+            )
+        }
+        item {
+            DashboardCard(
                 titulo = "Reportar Problema",
                 icono = Icons.Filled.ReportProblem,
                 onClick = { navController.navigate("crear_reporte") }

@@ -63,6 +63,8 @@ public class CultivoService {
         Cultivo actual = buscar(id);
         validar(datos);
 
+        // validar(datos) comprueba que el destino pertenece al mismo curso del
+        // docente (o es visible para el administrador global).
         actual.setSectorId(datos.getSectorId());
         actual.setNombreComun(datos.getNombreComun());
         actual.setDescripcion(datos.getDescripcion());

@@ -96,15 +96,18 @@ public class SecurityConfig {
                         // Usuarios autenticados pueden consultar
                         .requestMatchers(
                                 HttpMethod.GET,
+                                "/api/sectores",
                                 "/api/sectores/**",
+                                "/api/cultivos",
                                 "/api/cultivos/**"
                         ).authenticated()
 
-                        // Solo administradores pueden modificar
-                        .requestMatchers(
-                                "/api/sectores/**",
-                                "/api/cultivos/**"
-                        ).hasAnyRole("DOCENTE", "ADMINISTRADOR")
+                        // La asignación y gestión de sectores corresponde al administrador global.
+                        .requestMatchers("/api/sectores", "/api/sectores/**")
+                        .hasRole("ADMINISTRADOR")
+                        // Los docentes pueden gestionar cultivos solo de su curso (SectorService).
+                        .requestMatchers("/api/cultivos", "/api/cultivos/**")
+                        .hasAnyRole("DOCENTE", "ADMINISTRADOR")
 
                         // Denegar cualquier otra ruta
                         .anyRequest().denyAll()

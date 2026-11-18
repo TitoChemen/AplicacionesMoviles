@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import cl.duoc.huertaescolar.viewmodel.SectorViewModel
+import cl.duoc.huertaescolar.data.local.entity.Cultivo
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -25,15 +26,21 @@ fun DetalleSectorScreen(
     navController: NavController,
     viewModel: SectorViewModel,
     sectorId: Int,
-    puedeGestionar: Boolean
+    puedeGestionar: Boolean,
+    puedeCrearCultivo: Boolean
 ) {
     val sectores by viewModel.sectores.collectAsState()
     val cultivos by viewModel.cultivos.collectAsState()
+    val cursoPorSector by viewModel.cursoPorSector.collectAsState()
 
     // Buscamos el sector actual y filtramos solo sus cultivos asociados
     val sectorActual = sectores.find { it.id == sectorId }
     val cultivosDelSector = cultivos.filter { it.sectorId == sectorId }
     var confirmarEliminacion by remember(sectorId) { mutableStateOf(false) }
+    var cultivoEditando by remember(sectorId) { mutableStateOf<Cultivo?>(null) }
+    var cultivoEliminando by remember(sectorId) { mutableStateOf<Cultivo?>(null) }
+    var nombreCultivoEditado by remember(sectorId) { mutableStateOf("") }
+    var descripcionCultivoEditada by remember(sectorId) { mutableStateOf("") }
     DisposableEffect(sectorId) {
         viewModel.limpiarErrorSector()
         onDispose { viewModel.limpiarErrorSector() }
@@ -56,6 +63,44 @@ fun DetalleSectorScreen(
         )
     }
 
+    cultivoEditando?.let { cultivo ->
+        AlertDialog(onDismissRequest = { cultivoEditando = null },
+            title = { Text("Editar cultivo") },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = nombreCultivoEditado,
+                    onValueChange = { nombreCultivoEditado = it }, label = { Text("Nombre *") })
+                OutlinedTextField(value = descripcionCultivoEditada,
+                    onValueChange = { descripcionCultivoEditada = it },
+                    label = { Text("Descripción") })
+                viewModel.errorGeneral?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            } },
+            confirmButton = { TextButton(onClick = {
+                viewModel.editarCultivo(cultivo, nombreCultivoEditado, descripcionCultivoEditada) {
+                    cultivoEditando = null
+                }
+            }, enabled = !viewModel.cargando && nombreCultivoEditado.isNotBlank()) {
+                Text("Guardar")
+            } },
+            dismissButton = { TextButton(onClick = { cultivoEditando = null }) {
+                Text("Cancelar")
+            } })
+    }
+
+    cultivoEliminando?.let { cultivo ->
+        AlertDialog(onDismissRequest = { cultivoEliminando = null },
+            title = { Text("Eliminar cultivo") },
+            text = { Column {
+                Text("¿Eliminar definitivamente ${cultivo.nombreComun}?")
+                viewModel.errorGeneral?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            } },
+            confirmButton = { TextButton(onClick = {
+                viewModel.eliminarCultivo(cultivo) { cultivoEliminando = null }
+            }, enabled = !viewModel.cargando) { Text("Eliminar") } },
+            dismissButton = { TextButton(onClick = { cultivoEliminando = null }) {
+                Text("Cancelar")
+            } })
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -72,7 +117,7 @@ fun DetalleSectorScreen(
             )
         },
         floatingActionButton = {
-            if (puedeGestionar && sectorActual != null && sectorActual.estado == "ACTIVO") FloatingActionButton(
+            if (puedeCrearCultivo && sectorActual != null && sectorActual.estado == "ACTIVO") FloatingActionButton(
                 onClick = { navController.navigate("crear_cultivo/$sectorId") },
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
@@ -117,6 +162,8 @@ fun DetalleSectorScreen(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         Text("Estado: ${if (sectorActual.estado == "INACTIVO") "Archivado" else sectorActual.estado}",
+                            style = MaterialTheme.typography.labelMedium)
+                        Text("Curso: ${cursoPorSector[sectorId] ?: "Sin curso"}",
                             style = MaterialTheme.typography.labelMedium)
                         if (puedeGestionar) {
                             Spacer(modifier = Modifier.height(12.dp))
@@ -235,6 +282,9 @@ fun DetalleSectorScreen(
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
+                if (puedeCrearCultivo) viewModel.errorGeneral?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error)
+                }
             }
 
             if (cultivosDelSector.isEmpty()) {
@@ -277,6 +327,20 @@ fun DetalleSectorScreen(
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                                if (puedeCrearCultivo) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        TextButton(onClick = {
+                                            viewModel.limpiarErrorSector()
+                                            nombreCultivoEditado = cultivo.nombreComun
+                                            descripcionCultivoEditada = cultivo.descripcion
+                                            cultivoEditando = cultivo
+                                        }) { Text("Editar") }
+                                        TextButton(onClick = {
+                                            viewModel.limpiarErrorSector()
+                                            cultivoEliminando = cultivo
+                                        }) { Text("Eliminar") }
+                                    }
+                                }
                             }
                         }
                     }

@@ -2,7 +2,6 @@
 package cl.duoc.huertaescolar
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
@@ -27,6 +26,7 @@ import cl.duoc.huertaescolar.ui.theme.screens.*
 import cl.duoc.huertaescolar.viewmodel.AuthViewModel
 import cl.duoc.huertaescolar.viewmodel.SectorViewModel
 import cl.duoc.huertaescolar.viewmodel.TareaViewModel
+import cl.duoc.huertaescolar.viewmodel.AlertaViewModel
 
 @Composable
 fun HuertaAppNavigation() {
@@ -40,6 +40,7 @@ fun HuertaAppNavigation() {
     val authViewModel: AuthViewModel = viewModel()
     val sectorViewModel: SectorViewModel = viewModel()
     val tareaViewModel: TareaViewModel = viewModel()
+    val alertaViewModel: AlertaViewModel = viewModel()
 
     val usuario by authViewModel.usuarioActivo.collectAsState()
     val loginError by authViewModel.loginError.collectAsState()
@@ -62,6 +63,7 @@ fun HuertaAppNavigation() {
 
     LaunchedEffect(accessToken) {
         sectorViewModel.configurarSesion(accessToken)
+        alertaViewModel.configurarSesion(accessToken)
     }
 
     // =====================================
@@ -208,7 +210,7 @@ fun HuertaAppNavigation() {
                 viewModel = sectorViewModel,
                 onBackClick = { navController.popBackStack() },
                 onCrearSector = { navController.navigate("crear_sector") },
-                puedeCrear = Perfil.esPersonal(usuario?.perfil),
+                puedeCrear = usuario?.perfil == Perfil.ADMINISTRADOR,
                 esAdminGlobal = usuario?.perfil == Perfil.ADMINISTRADOR,
                 onSectorClick = { id -> navController.navigate("detalle_sector/$id") }
             )
@@ -219,24 +221,26 @@ fun HuertaAppNavigation() {
         // =====================================
 
         composable("crear_sector") {
-
-            CrearSectorScreen(
-                navController = navController,
-                viewModel = sectorViewModel,
-
-                idAdministradorActivo = usuario?.identificador ?: "admin1",
-                esAdminGlobal = usuario?.perfil == Perfil.ADMINISTRADOR
-            )
+            if (usuario?.perfil == Perfil.ADMINISTRADOR) {
+                CrearSectorScreen(
+                    navController = navController,
+                    viewModel = sectorViewModel,
+                    idAdministradorActivo = usuario?.identificador.orEmpty(),
+                    esAdminGlobal = true
+                )
+            } else {
+                LaunchedEffect(Unit) { navController.popBackStack() }
+            }
         }
 
         // =====================================
-        // EDICIÓN DE SECTOR (DOCENTE / ADMIN)
+        // EDICIÓN DE SECTOR (SOLO ADMINISTRADOR)
         // =====================================
         composable(
             route = "editar_sector/{sectorId}",
             arguments = listOf(navArgument("sectorId") { type = NavType.IntType })
         ) { entry ->
-            if (Perfil.esPersonal(usuario?.perfil)) {
+            if (usuario?.perfil == Perfil.ADMINISTRADOR) {
                 EditarSectorScreen(
                     navController = navController,
                     viewModel = sectorViewModel,
@@ -268,7 +272,8 @@ fun HuertaAppNavigation() {
                 navController = navController,
                 viewModel = sectorViewModel,
                 sectorId = sectorId,
-                puedeGestionar = Perfil.esPersonal(usuario?.perfil)
+                puedeGestionar = usuario?.perfil == Perfil.ADMINISTRADOR,
+                puedeCrearCultivo = Perfil.esPersonal(usuario?.perfil)
             )
         }
 
@@ -417,30 +422,27 @@ fun HuertaAppNavigation() {
         }
 
         // =====================================
-        // REPORTES PENDIENTES
+        // REPORTES Y ALERTAS
         // =====================================
 
         composable("crear_reporte") {
-
-            PantallaEnConstruccion(
-                "Reportar Problema"
-            ) {
-                navController.popBackStack()
+            if (usuario?.perfil == Perfil.ESTUDIANTE) {
+                ReportarProblemaScreen(navController, alertaViewModel, sectorViewModel)
+            } else {
+                LaunchedEffect(Unit) { navController.popBackStack() }
             }
         }
 
         composable("lista_reportes") {
-
-            PantallaEnConstruccion(
-                "Reportes Huerto"
-            ) {
-                navController.popBackStack()
+            if (Perfil.esPersonal(usuario?.perfil)) {
+                ListaReportesScreen(navController, alertaViewModel, sectorViewModel)
+            } else {
+                LaunchedEffect(Unit) { navController.popBackStack() }
             }
         }
         }
     }
 }
-
 @Composable
 private fun EncabezadoSesion(usuario: Usuario?) {
     if (usuario == null) return
@@ -467,34 +469,6 @@ private fun EncabezadoSesion(usuario: Usuario?) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-            }
-        }
-    }
-}
-
-// =====================================
-// PANTALLA TEMPORAL
-// =====================================
-
-@Composable
-fun PantallaEnConstruccion(
-    titulo: String,
-    onVolver: () -> Unit
-) {
-
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-
-            Text("$titulo: en construcción")
-
-            Button(onClick = onVolver) {
-                Text("Volver")
             }
         }
     }

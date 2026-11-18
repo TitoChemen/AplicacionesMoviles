@@ -42,6 +42,9 @@ public class CursoActual {
     public void exigirDocente() {
         if (!esDocente()) throw new AccessDeniedException("Solo personal docente o administrador");
     }
+    public void exigirAdminGlobal() {
+        if (!esAdminGlobal()) throw new AccessDeniedException("Solo el administrador global puede gestionar sectores");
+    }
     public void exigirCurso(Long id) {
         if (esAdminGlobal()) return; // el administrador puede consultar recursos de todos los cursos
         if (id == null || !id().equals(id)) {

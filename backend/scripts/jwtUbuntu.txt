@@ -6,7 +6,7 @@ echo "$JWT_SECRET"
 
 usuarios-service
 
-DB_PASSWORD=Huerta2026!;PLAINTEXT_DEV=true;JWT_SECRET=TU_CLAVE_JWT
+DB_PASSWORD=Huerta2026!;JWT_SECRET=TU_CLAVE_JWT;PLAINTEXT_DEV=true
 
 
 cualquier otro microservicio q no sea usuarios (exceptuando api gateway)

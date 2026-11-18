@@ -1,9 +1,16 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     id("com.google.devtools.ksp")
 
+}
+
+val signingProperties = Properties().apply {
+    val config = rootProject.file("signing/demo.properties")
+    if (config.exists()) config.inputStream().use { load(it) }
 }
 
 android {
@@ -18,9 +25,29 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Emulador por defecto; usar -PHUERTA_API_BASE_URL=http://IP_DEL_PC:8080/
+        // para compilar un APK que funcione en un teléfono conectado a la misma red.
+        val backendUrl = providers.gradleProperty("HUERTA_API_BASE_URL")
+            .orElse(providers.environmentVariable("HUERTA_API_BASE_URL"))
+            .orElse("http://10.0.2.2:8080/").get()
+        require(backendUrl.startsWith("http://") || backendUrl.startsWith("https://"))
+        require(backendUrl.endsWith("/") && '"' !in backendUrl && '\n' !in backendUrl)
+        buildConfigField("String", "BACKEND_BASE_URL", "\"$backendUrl\"")
+    }
+    signingConfigs {
+        create("demoRelease") {
+            storeFile = rootProject.file("signing/huerta-demo-release.jks")
+            storePassword = signingProperties.getProperty("storePassword")
+            keyAlias = signingProperties.getProperty("keyAlias")
+            keyPassword = signingProperties.getProperty("keyPassword")
+        }
     }
     buildTypes {
+        debug {
+            enableUnitTestCoverage = true
+        }
         release {
+            signingConfig = signingConfigs.getByName("demoRelease")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -37,6 +64,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

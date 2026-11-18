@@ -15,6 +15,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import cl.duoc.huertaescolar.viewmodel.SectorViewModel
+import cl.duoc.huertaescolar.viewmodel.ClimaViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -26,6 +28,9 @@ fun SectorScreen(
     esAdminGlobal: Boolean,
     onSectorClick: (Int) -> Unit
 ) {
+    val climaViewModel: ClimaViewModel = viewModel()
+    val clima by climaViewModel.estado.collectAsState()
+    LaunchedEffect(Unit) { climaViewModel.actualizar() }
     val sectores by viewModel.sectores.collectAsState()
     val cursoPorSector by viewModel.cursoPorSector.collectAsState()
     LaunchedEffect(esAdminGlobal) { if (esAdminGlobal) viewModel.cargarCursos() }
@@ -52,6 +57,28 @@ fun SectorScreen(
             }
             if (viewModel.errorGeneral != null) item {
                 Text(viewModel.errorGeneral.orEmpty(), color = MaterialTheme.colorScheme.error)
+            }
+            item {
+                ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text("Clima exterior · Santiago", style = MaterialTheme.typography.titleMedium)
+                        Text("Open-Meteo · Referencia para planificar el trabajo en la huerta",
+                            style = MaterialTheme.typography.bodySmall)
+                        when {
+                            clima.dato != null -> {
+                                Text("${clima.dato!!.temperaturaCelsius} °C · " +
+                                    "Humedad del aire ${clima.dato!!.humedadAirePorcentaje} % · " +
+                                    "Precipitación ${clima.dato!!.precipitacionMm} mm")
+                                if (clima.error != null) Text(clima.error.orEmpty(),
+                                    color = MaterialTheme.colorScheme.error)
+                            }
+                            clima.cargando -> CircularProgressIndicator()
+                            else -> Text(clima.error ?: "Sin datos meteorológicos")
+                        }
+                        TextButton(onClick = climaViewModel::actualizar,
+                            enabled = !clima.cargando) { Text("Actualizar clima") }
+                    }
+                }
             }
             item {
                 Text("Sensores · Datos simulados", style = MaterialTheme.typography.titleMedium)

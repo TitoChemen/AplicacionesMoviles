@@ -1,8 +1,8 @@
 # Huerta Escolar — roles y evidencias
 
-Ver el instructivo completo en `../README_CAMBIOS_2026_11_16.md`.
+Ver el instructivo completo en `../README.md` y el estado de la entrega en `../CHECKLIST_ENTREGA.md`.
 
-- **DOCENTE:** solo tareas, alumnos y sectores de su curso.
+- **DOCENTE:** solo tareas, alumnos y sectores de su curso; no administra sectores.
 - **ADMINISTRADOR:** cuenta global sin curso, puede ver y validar entregas de todos los cursos.
 - **ESTUDIANTE:** solo sus propias tareas.
 - La justificación del estudiante se guarda en `tareas.comentario_estudiante` junto con la fotografía.
