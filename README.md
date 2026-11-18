@@ -4,7 +4,7 @@ Aplicación Android en Kotlin y Jetpack Compose para organizar sectores, cultivo
 
 ## Equipo
 
-En el código recibido figuran Kevin, Oscar y Jaime. **La pauta de la Evaluación Parcial 4 exige entrega en parejas**: confirmar con el docente cuál pareja y repositorio presentarán antes de entregar. La autoría real y los commits deben quedar en GitHub; no se sustituyen con este documento.
+En el código recibido figuran Kevin, Oscar y Jaime. **La pauta de la Evaluación Parcial 4 **: La autoría real y los commits deben quedar en GitHub; no se sustituyen con este documento.
 
 ## Arquitectura y permisos
 
@@ -65,6 +65,6 @@ cd Frontend
 
 La generación y verificación del APK requieren Android SDK y dependencias Gradle; **el paquete entregado no contiene un APK compilado**. Para la entrega en GitHub y AVA, generar el APK desde el equipo del curso, conservar el `.jks`, verificar la firma, agregar el archivo al repositorio de entrega (la regla general `*.apk` de `.gitignore` exige `git add -f`) y capturar la evidencia requerida por la pauta. Usar la URL del gateway que sea accesible desde el teléfono en la defensa.
 
-## Pendientes de entrega
+## Checklist
 
-Consultar [CHECKLIST_ENTREGA.md](CHECKLIST_ENTREGA.md). Los commits de ambos integrantes, las tarjetas de Trello, la captura del APK y la entrega en AVA son evidencias externas que deben aportar quienes presentarán el proyecto. No modificar el repositorio después del plazo que indique el docente.
+Consultar [CHECKLIST_ENTREGA.md](CHECKLIST_ENTREGA.md)
