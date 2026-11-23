@@ -112,20 +112,31 @@ dependencies {
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 }
 
-/*kover {
+kover {
     reports {
         filters {
             includes {
                 classes(
-                    "cl.duoc.consumiendoapi.ui.form.ClienteValidator*",
-                    "cl.duoc.consumiendoapi.ui.form.ClienteFormViewModel*",
-                    "cl.duoc.consumiendoapi.ui.clientes.ClientesViewModel*",
-                    "cl.duoc.consumiendoapi.data.repository.ClientesRepository*",
-                    "cl.duoc.consumiendoapi.data.repository.ApiErrorMapper*",
-                    "cl.duoc.consumiendoapi.data.usecase.ClientesUseCases*",
-                    "cl.duoc.consumiendoapi.domain.usecase.CalcularEstadisticasUseCase*"
+                    "cl.duoc.huertaescolar.data.repository.ClimaRepository*",
+                    "cl.duoc.huertaescolar.data.Constantes*",
+                    "cl.duoc.huertaescolar.data.Perfil*",
+                    "cl.duoc.huertaescolar.data.EstadoTarea*",
+                    "cl.duoc.huertaescolar.data.local.entity.*"
+                )
+            }
+            excludes {
+                classes(
+                    "cl.duoc.huertaescolar.ui.*",
+                    "cl.duoc.huertaescolar.MainActivity*",
+                    "cl.duoc.huertaescolar.HuertaAppNavigation*",
+                    "*.*_Impl*"
                 )
             }
         }
+        verify {
+            rule {
+                minBound(80)
+            }
+        }
     }
-}*/ //ADAPTAR A NUESTRO PROYECTO
+}
